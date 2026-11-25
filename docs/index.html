@@ -106,7 +106,7 @@
   .bm { display: none; cursor: grab; }
   .more { margin-top: 14px; }
   .more summary { cursor: pointer; color: var(--fjord); font-weight: 600; padding: 0; display: block; }
-  .more summary::after { content: none; }
+  .more summary::after, .more[open] summary::after { content: none; }
   .more { border: 0; }
   .more .in { padding: 10px 0 0; }
   #m-outlook:checked ~ .bm-outlook, #m-gmail:checked ~ .bm-gmail, #m-annet:checked ~ .bm-annet { display: inline-flex; }
@@ -148,6 +148,8 @@
   details summary::after { content: "Vis"; color: var(--fjord); font-weight: 600; flex: none; }
   details[open] summary::after { content: "Skjul"; }
   details .in { padding: 0 0 18px; }
+  details + details { border-top: 0; }
+  details .more { border: 0; }
   details ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
   details h4 { margin: 14px 0 6px; font-size: 16px; }
   code { font-family: var(--mono); font-size: .88em; }
@@ -179,9 +181,41 @@
 
 <main class="wrap">
 
-  <section id="kom-i-gang">
-    <h2>Kom i gang</h2>
-    <p class="sec-lead">Gjøres én gang og tar noen minutter.</p>
+  <section id="slik">
+    <h2>Slik bruker du det</h2>
+    <ol class="setup">
+      <li>
+        <h3>Send lenken til hytta</h3>
+        <p class="why">Velg datoer og antall personer på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a>. Trykk Del og send lenken på e-post til Hyttevarsel. På PC kopierer du adressen fra adresselinja.</p>
+      </li>
+      <li>
+        <h3>Vent på e-posten</h3>
+        <p class="why">Du får svar innen et par minutter. Når noen avbestiller, kommer en e-post med knappen Bestill nå, som åpner DNT-siden med datoene fylt inn.</p>
+      </li>
+      <li>
+        <h3>Si fra når du har bestilt</h3>
+        <p class="why">Trykk «Jeg har booket» i e-posten, eller svar «stopp». Da slutter varslene for den hytta.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Slik ser varselet ut</h2>
+    <p class="sec-lead">Ledige plasser blir tatt fort, så det lønner seg å bestille med en gang.</p>
+    <div class="alert" aria-label="Eksempel på varsel">
+      <div class="head"><b>Hyttevarsel</b><span>Ledig: Skåla lør 12. juli</span></div>
+      <div class="content">
+        <h3>Ledig nå: Skåla</h3>
+        <p class="meta">Det er blitt plass til 2 personer. Andre ser den ledige plassen også, så det lønner seg å bestille med en gang.</p>
+        <p class="meta">Lørdag 12. juli 2027, 1 natt.</p>
+        <span class="fake">Bestill nå</span>
+        <div class="small"><span>Jeg har booket</span><span>Slutt å følge med</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="forste-gang">
+    <h2>Første gang</h2>
     <ol class="setup">
       <li>
         <h3>Finn velkomst-e-posten</h3>
@@ -189,12 +223,17 @@
       </li>
       <li>
         <h3>Slå på varsler for Hyttevarsel</h3>
-        <p class="why">Ledige plasser blir tatt fort. Gjør Hyttevarsel til favoritt i Outlook eller VIP i Mail, så sier telefonen fra når e-posten kommer.</p>
+        <p class="why">Gjør Hyttevarsel til favoritt i Outlook eller VIP i Mail, så sier telefonen fra når e-posten kommer.</p>
       </li>
-      <li>
-        <h3>Lag en «Følg med»-knapp</h3>
-        <p class="why">Da sender du en hytte med ett trykk.</p>
-        <div class="body device">
+    </ol>
+  </section>
+
+  <section id="mer">
+    <h2>Mer</h2>
+    <details>
+      <summary>Send en hytte med ett trykk</summary>
+      <div class="in">
+<div class="device">
           <input type="radio" name="device" id="d-iphone" checked>
           <input type="radio" name="device" id="d-android">
           <input type="radio" name="device" id="d-pc">
@@ -242,37 +281,12 @@
             </details>
           </div>
         </div>
-      </li>
-      <li>
-        <h3>Prøv med en hytte</h3>
-        <p class="why">Velg en hytte og datoer på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a> og send den. Innen et par minutter får du svar: enten at Hyttevarsel følger med, eller at det er ledig nå.</p>
-      </li>
-    </ol>
-  </section>
-
-  <section>
-    <h2>Når noen avbestiller</h2>
-    <p class="sec-lead">Da kommer en e-post som denne.</p>
-    <div class="alert" aria-label="Eksempel på varsel">
-      <div class="head"><b>Hyttevarsel</b><span>Ledig: Skåla lør 12. juli</span></div>
-      <div class="content">
-        <h3>Ledig nå: Skåla</h3>
-        <p class="meta">Det er blitt plass til 2 personer. Andre ser den ledige plassen også, så det lønner seg å bestille med en gang.</p>
-        <p class="meta">Lørdag 12. juli 2027, 1 natt.</p>
-        <span class="fake">Bestill nå</span>
-        <div class="small"><span>Jeg har booket</span><span>Slutt å følge med</span></div>
       </div>
-    </div>
-    <ul class="notes">
-      <li><span><b>Bestill nå</b> åpner DNT-siden med datoene og antall personer fylt inn.</span></li>
-      <li><span><b>Jeg har booket</b> åpner et ferdig svar. Send det, så stopper varslene for den hytta. Du kan også bare svare «stopp».</span></li>
-      <li><span>Blir plassen tatt før du rekker det, følger Hyttevarsel med videre.</span></li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Andre datoer</h2>
-    <p class="sec-lead">Skriv datoen i emnefeltet når du sender lenken. Prøv her hvordan Hyttevarsel forstår det:</p>
+    </details>
+    <details>
+      <summary>Andre datoer enn dem i lenken</summary>
+      <div class="in">
+        <p style="margin-top:0">Skriv datoen i emnefeltet når du sender lenken. Prøv her hvordan Hyttevarsel forstår det:</p>
     <label class="try-label" for="try">Emnefelt</label>
     <input id="try" class="try" type="text" value="mellom 10. og 14. juli, 2 personer" autocomplete="off" spellcheck="false">
     <p id="try-out" class="try-out" aria-live="polite"></p>
@@ -284,16 +298,18 @@
       <button type="button" data-try="helger i juni, 3 personer">helger i juni, 3 personer</button>
     </div>
     <p class="aside">Flere hyttelenker i samme e-post blir en tur fra hytte til hytte, én natt på hver, med varsel når hele turen går opp. Glemte du datoen, spør Hyttevarsel «Hvilken dato?», og du svarer bare med datoen.</p>
-  </section>
-
-  <section>
-    <h2>Svar du kan sende</h2>
-    <p class="sec-lead">Svar på en e-post fra Hyttevarsel.</p>
+      </div>
+    </details>
+    <details>
+      <summary>Svar du kan sende</summary>
+      <div class="in">
     <div class="ref">
       <div><code>stopp</code><span>Slutt å følge med på hytta e-posten gjelder</span></div>
       <div><code>stopp alt</code><span>Slutt å følge med på alle</span></div>
       <div><code>oversikt</code><span>Få lista over alt du følger med på. Den kommer også hver søndag kveld.</span></div>
     </div>
+      </div>
+    </details>
   </section>
 
   <footer>
