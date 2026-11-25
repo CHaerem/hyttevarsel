@@ -17,40 +17,17 @@ Tjenesten merker e-post som lest når den er behandlet, også e-post den
 ignorerer. Gmails bekreftelseskode for videresending (bruksanvisningen,
 «Slutt å følge med av seg selv») ligger derfor som lest i innboksen.
 
-## 2. Hemmelighetene (på mac-1, i Homelab-klonen)
-
-E-postoppsettet, kryptert til eieren og klusteret (`.sops.yaml`):
+## 2. Hemmelighetene (én kommando på mac-1)
 
 ```sh
-umask 077
-cat > kubernetes/apps/hyttevarsel/smtp.sops.yaml <<'YAML'
-apiVersion: isindir.github.com/v1alpha3
-kind: SopsSecret
-metadata:
-  name: hyttevarsel-smtp
-  namespace: hyttevarsel
-  annotations:
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  enforceOwnership: true
-  secretTemplates:
-    - name: hyttevarsel-smtp
-      stringData:
-        SMTP_USER: <varseladressen>
-        SMTP_PASSWORD: <app-passordet>
-        MAIL_TO: <Kristines adresse>
-        BASE_URL: https://hyttevarsel.<tailnettet>.ts.net
-YAML
-sops -e -i kubernetes/apps/hyttevarsel/smtp.sops.yaml
+curl -fsSL https://raw.githubusercontent.com/CHaerem/hyttevarsel/main/scripts/hemmeligheter.sh | bash
 ```
 
-Varselagenten, med skriptet Homelab har for dette:
-
-```sh
-scripts/sops-secret.sh kubernetes/apps/hyttevarsel/varsel-agent.sops.yaml \
-  hyttevarsel varsel-agent \
-  url=/run/secrets/varsel-agent-url token=/run/secrets/varsel-agent-token
-```
+Skriptet spør etter varseladressen, app-passordet, Kristines adresse og
+tailnet-navnet. Det prøver innloggingen mot Gmail, henter varselagentens
+URL og token fra linux-4, krypterer begge hemmelighetene til eieren og
+klusteret (`.sops.yaml` i Homelab) og åpner en PR i Homelab. Merge den, så
+starter poden. Ingen verdi havner i klartekst på disk eller i argv.
 
 ## 3. Første test
 
