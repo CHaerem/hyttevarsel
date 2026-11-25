@@ -125,6 +125,15 @@
   .ref span { color: var(--ink-2); font-size: 16px; }
   @media (max-width: 560px) { .ref div { grid-template-columns: minmax(0, 1fr); } }
 
+  .try-label { display: block; font-size: 14px; color: var(--ink-2); margin-bottom: 6px; }
+  .try { width: 100%; font: 600 18px var(--body); color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; padding: 13px 14px; }
+  .try:focus { outline: none; border-color: var(--fjord); box-shadow: 0 0 0 3px var(--fjord-soft); }
+  .try-out { min-height: 3.1em; margin: 10px 0 14px; padding-left: 12px; border-left: 3px solid var(--rule); color: var(--ink-2); }
+  .try-out.good { border-color: var(--fjord); color: var(--ink); }
+  .try-out.warn { border-color: var(--contour); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips button { font: 500 15px var(--body); color: var(--ink); background: none; border: 1px solid var(--rule); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .chips button:hover { border-color: var(--fjord); color: var(--fjord); }
   details { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
   details summary { cursor: pointer; padding: 16px 0; font-weight: 700; list-style: none; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
   details summary::-webkit-details-marker { display: none; }
@@ -244,17 +253,18 @@
 
   <section>
     <h2>Andre datoer</h2>
-    <p class="sec-lead">Skriv i emnefeltet når du sender lenken. Du får varsel for hver dato som blir ledig.</p>
-    <div class="ref">
-      <div><code>12. juli</code><span>Én natt med ankomst 12. juli</span></div>
-      <div><code>12.–14. juli</code><span>Ankomst 12., avreise 14. juli</span></div>
-      <div><code>en natt mellom 10. og 20. juli</code><span>Hver ankomstdag i perioden</span></div>
-      <div><code>lørdager i august</code><span>Alle lørdager i august</span></div>
-      <div><code>helger i juni</code><span>Alle fredager og lørdager i juni</span></div>
-      <div><code>3 personer</code><span>Hvor mange dere er, hvis det ikke står i lenken</span></div>
-      <div><code>flere lenker</code><span>En tur fra hytte til hytte, én natt på hver. Varsel når hele turen går opp.</span></div>
+    <p class="sec-lead">Skriv datoen i emnefeltet når du sender lenken. Prøv her hvordan Hyttevarsel forstår det:</p>
+    <label class="try-label" for="try">Emnefelt</label>
+    <input id="try" class="try" type="text" value="mellom 10. og 14. juli, 2 personer" autocomplete="off" spellcheck="false">
+    <p id="try-out" class="try-out" aria-live="polite"></p>
+    <div class="chips">
+      <button type="button" data-try="12. juli">12. juli</button>
+      <button type="button" data-try="12.–14. juli">12.–14. juli</button>
+      <button type="button" data-try="en natt mellom 10. og 20. juli">en natt mellom 10. og 20. juli</button>
+      <button type="button" data-try="lørdager i august">lørdager i august</button>
+      <button type="button" data-try="helger i juni, 3 personer">helger i juni, 3 personer</button>
     </div>
-    <p class="aside">Glemte du datoene, spør Hyttevarsel «Hvilken dato?». Da svarer du bare med datoen.</p>
+    <p class="aside">Flere hyttelenker i samme e-post blir en tur fra hytte til hytte, én natt på hver, med varsel når hele turen går opp. Glemte du datoen, spør Hyttevarsel «Hvilken dato?», og du svarer bare med datoen.</p>
   </section>
 
   <section>
@@ -308,6 +318,91 @@
       if (navigator.clipboard) navigator.clipboard.writeText(addr.textContent).then(done, select);
       else select();
     });
+  })();
+  // «Prøv selv»: samme tolkning som tjenesten gjør (parse.go), i liten skala.
+  (function () {
+    var MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, mai: 4, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, okt: 9, nov: 10, des: 11 };
+    var MNAME = ["januar","februar","mars","april","mai","juni","juli","august","september","oktober","november","desember"];
+    var DNAME = ["søn","man","tir","ons","tor","fre","lør"];
+    var DFULL = ["søndag","mandag","tirsdag","onsdag","torsdag","fredag","lørdag"];
+    var WORDS = { en: 1, "én": 1, ei: 1, ett: 1, to: 2, tre: 3, fire: 4, fem: 5, seks: 6, sju: 7, syv: 7, "åtte": 8, ni: 9, ti: 10 };
+    var M = "(januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|aug|sept|sep|okt|nov|des)";
+    var N = "(\\d{1,2}|en|én|ei|ett|to|tre|fire|fem|seks|sju|syv|åtte|ni|ti)";
+    var num = function (s) { return /^\d+$/.test(s) ? +s : (WORDS[s.toLowerCase()] || 0); };
+    var mon = function (s) { s = s.toLowerCase(); return MONTHS[s.length > 3 && s !== "sept" ? s.slice(0, 3) : s]; };
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var infer = function (d, m, y) {
+      var t = new Date(y ? +y + (+y < 100 ? 2000 : 0) : today.getFullYear(), m, d);
+      if (t.getDate() !== d) return null;
+      if (!y && t < today) t.setFullYear(t.getFullYear() + 1);
+      return t;
+    };
+    var add = function (t, n) { var u = new Date(t); u.setDate(u.getDate() + n); return u; };
+    var short = function (t) { return DNAME[t.getDay()] + " " + t.getDate() + ". " + MNAME[t.getMonth()]; };
+    var long = function (t) { return DFULL[t.getDay()] + " " + t.getDate() + ". " + MNAME[t.getMonth()] + " " + t.getFullYear(); };
+    var netter = function (n) { return n === 1 ? "1 natt" : n + " netter"; };
+    var pers = function (n) { return n === 1 ? "1 person" : n + " personer"; };
+
+    function parse(text) {
+      var nights = 0, guests = 1, m;
+      if ((m = new RegExp("(^|[^\\p{L}\\d])" + N + "\\s+(natt|netter)", "iu").exec(text))) nights = num(m[2]);
+      if ((m = new RegExp("(^|[^\\p{L}\\d])" + N + "\\s+(personer|person|pers|voksne|voksen|stk)|vi er\\s+" + N, "iu").exec(text))) guests = num(m[2] || m[4]) || 1;
+      var flex = /mellom|fleksib|hvilken som helst|ledig natt|når som helst/i.test(text);
+
+      if ((m = new RegExp("((?:(?:mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|helg)(?:er|ene|en)?\\s*(?:,|og)?\\s*)+)\\s+i\\s+" + M + "(?:\\s+(\\d{4}))?", "i").exec(text))) {
+        var days = [];
+        (m[1].match(/mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|helg/gi) || []).forEach(function (w) {
+          var k = w.toLowerCase().slice(0, 3);
+          if (k === "hel") days.push(5, 6); else days.push({ man: 1, tir: 2, ons: 3, tor: 4, fre: 5, "lør": 6, "søn": 0 }[k]);
+        });
+        var first = infer(1, mon(m[2]), m[3]), starts = [];
+        for (var d = first; d && d.getMonth() === first.getMonth(); d = add(d, 1)) if (days.indexOf(d.getDay()) >= 0 && d >= today) starts.push(d);
+        return { starts: starts, nights: nights || 1, guests: guests };
+      }
+      var a = null, b = null;
+      if ((m = new RegExp("(\\d{1,2})\\.?\\s*(?:-|–|—|til|og)\\s*(\\d{1,2})\\.?\\s*" + M + "\\.?(?:\\s+(\\d{4}))?", "i").exec(text))) {
+        a = infer(+m[1], mon(m[3]), m[4]); b = infer(+m[2], mon(m[3]), m[4]);
+      } else {
+        var toks = [], re = new RegExp("(\\d{1,2})\\.?\\s*" + M + "\\.?(?:\\s+(\\d{4}))?|(\\d{1,2})\\.(\\d{1,2})(?:\\.(\\d{4}|\\d{2}))?", "gi");
+        while ((m = re.exec(text))) {
+          var t = m[2] ? infer(+m[1], mon(m[2]), m[3]) : infer(+m[4], +m[5] - 1, m[6]);
+          if (t) toks.push({ t: t, s: m.index, e: m.index + m[0].length });
+        }
+        if (!toks.length) return null;
+        if (toks.length === 2 && /^\s*(-|–|—|til|og|to)\s*$/i.test(text.slice(toks[0].e, toks[1].s)) && toks[1].t > toks[0].t) { a = toks[0].t; b = toks[1].t; }
+        else return { starts: toks.map(function (x) { return x.t; }), nights: nights || 1, guests: guests };
+      }
+      if (!a || !b) return null;
+      if (!flex && !nights) return { starts: [a], nights: Math.round((b - a) / 864e5), guests: guests };
+      var n = nights || 1, list = [];
+      for (var x = a; x <= add(b, -n) || +x === +a; x = add(x, 1)) list.push(x);
+      return { starts: list, nights: n, guests: guests };
+    }
+
+    function describe(r) {
+      if (!r || !r.starts.length) return null;
+      if (r.starts.length > 31) return { err: "Det blir " + r.starts.length + " mulige datoer. Høyst 31 per hytte, så del perioden i to." };
+      if (r.starts.length === 1) return { ok: "Ankomst " + long(r.starts[0]) + ", " + netter(r.nights) + ", " + pers(r.guests) + "." };
+      var run = r.starts.every(function (t, i) { return i === 0 || +t === +add(r.starts[i - 1], 1); });
+      var when = run ? "hvilken som helst dag fra " + short(r.starts[0]) + " til " + short(r.starts[r.starts.length - 1]) + " (" + r.starts.length + " datoer)"
+                     : r.starts.map(short).join(", ");
+      return { ok: netter(r.nights) + ", " + pers(r.guests) + ", med ankomst " + when + ". Du får varsel for hver dato som blir ledig." };
+    }
+
+    var input = document.getElementById("try"), out = document.getElementById("try-out");
+    function run() {
+      var v = input.value.trim();
+      if (!v) { out.textContent = "Skriv noe, eller trykk på et av eksemplene."; out.className = "try-out"; return; }
+      var d = describe(parse(v));
+      if (!d) { out.textContent = "Her fant jeg ingen dato. Prøv for eksempel «12. juli»."; out.className = "try-out warn"; }
+      else if (d.err) { out.textContent = d.err; out.className = "try-out warn"; }
+      else { out.textContent = d.ok; out.className = "try-out good"; }
+    }
+    input.addEventListener("input", run);
+    document.querySelectorAll("[data-try]").forEach(function (el) {
+      el.addEventListener("click", function () { input.value = el.getAttribute("data-try"); run(); input.focus(); });
+    });
+    run();
   })();
 </script>
 </body>
