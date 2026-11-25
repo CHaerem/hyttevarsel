@@ -2,226 +2,268 @@
 <html lang="nb">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hyttevarsel</title>
 <meta name="description" content="Få beskjed på e-post når en fullbooket DNT-hytte blir ledig.">
+<meta name="theme-color" content="#24533e">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2324533e'/%3E%3Cpath d='M7 23 16 9l9 14z' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f4f1ea; --card: #ffffff; --text: #1f2a24; --muted: #5b6760; --line: #e1ddd2;
-    --accent: #2f6b4f; --accent-soft: #e3efe8; --warm: #b8572f; --code: #f0ede5;
-    --shadow: 0 1px 2px rgba(31, 42, 36, .06), 0 6px 20px rgba(31, 42, 36, .06);
+    --bg: #f5f1e8; --card: #fffdf8; --text: #1d2a23; --muted: #5d6a62; --line: #e4ddcd;
+    --forest: #24533e; --forest-2: #3f7a5c; --moss: #e2ecdf; --rust: #c2552c; --sky1: #f6e2c4; --sky2: #f3efe4;
+    --code: #efe9dc; --shadow: 0 1px 2px rgba(29,42,35,.05), 0 10px 30px -12px rgba(29,42,35,.18);
+    --serif: "Fraunces", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #141815; --card: #1d221f; --text: #e8ece9; --muted: #a3ada7; --line: #2f3632;
-      --accent: #7cc39d; --accent-soft: #233229; --warm: #e59a74; --code: #262c28;
-      --shadow: none;
+      --bg: #121714; --card: #1b221e; --text: #eaeee9; --muted: #a2aea7; --line: #2c3530;
+      --forest: #8fd0ac; --forest-2: #6fb58f; --moss: #213129; --rust: #ea8a63; --sky1: #1d2a24; --sky2: #121714;
+      --code: #26302a; --shadow: none;
     }
   }
   * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 680px; margin: 0 auto; padding: 0 16px 64px; }
-  a { color: var(--accent); }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.6 var(--sans); }
+  a { color: var(--forest); text-underline-offset: 3px; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 0 18px; }
 
-  header { padding: 44px 0 28px; }
-  .mark { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; color: var(--accent);
-    letter-spacing: .02em; font-size: 15px; text-transform: uppercase; }
-  .mark svg { width: 28px; height: 28px; }
-  h1 { font-size: clamp(30px, 8vw, 42px); line-height: 1.12; margin: 14px 0 12px; letter-spacing: -.01em; }
-  .lead { font-size: 19px; color: var(--muted); margin: 0 0 22px; }
-  .address { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-  .address code { font-size: 16px; }
+  /* Toppen: fjell, hytte og sol */
+  .hero { background: linear-gradient(180deg, var(--sky1) 0%, var(--sky2) 100%); position: relative; overflow: hidden; }
+  .hero .wrap { position: relative; z-index: 1; padding-top: 34px; padding-bottom: 160px; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; color: var(--forest);
+    font-size: 14px; letter-spacing: .08em; text-transform: uppercase; }
+  .brand i { width: 30px; height: 30px; border-radius: 9px; background: var(--forest); display: grid; place-items: center; }
+  .brand svg { width: 18px; height: 18px; }
+  h1 { font-family: var(--serif); font-weight: 700; font-size: clamp(36px, 10vw, 54px); line-height: 1.04;
+    margin: 22px 0 14px; letter-spacing: -.02em; }
+  h1 em { font-style: normal; color: var(--rust); }
+  .lead { font-size: 19px; color: var(--muted); margin: 0; max-width: 32em; }
+  .landscape { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: 170px; display: block; }
 
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    padding: 13px 18px; border-radius: 12px; font-weight: 600; text-decoration: none; font-size: 16px; }
-  .btn.primary { background: var(--accent); color: #fff; }
-  @media (prefers-color-scheme: dark) { .btn.primary { color: #10201a; } }
-  .btn.ghost { background: var(--accent-soft); color: var(--accent); }
+  /* Adressekortet */
+  .addr { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 18px;
+    box-shadow: var(--shadow); margin-top: -34px; position: relative; z-index: 2; }
+  .addr small { display: block; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .addr .email { font-weight: 600; font-size: 18px; margin: 2px 0 14px; word-break: break-all; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 12px; border-radius: 12px;
+    font: 600 15px var(--sans); text-decoration: none; border: 0; cursor: pointer; }
+  .btn.primary { background: var(--forest); color: var(--card); }
+  .btn.soft { background: var(--moss); color: var(--forest); }
+  .btn svg { width: 18px; height: 18px; flex: none; }
 
-  section { margin-top: 40px; }
-  h2 { font-size: 23px; margin: 0 0 6px; }
-  h2 + p { color: var(--muted); margin-top: 0; }
-  h3 { font-size: 18px; margin: 0 0 4px; }
+  section { padding-top: 52px; }
+  .eyebrow { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--rust); margin: 0 0 6px; }
+  h2 { font-family: var(--serif); font-weight: 600; font-size: 30px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0 0 18px; }
 
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px;
-    box-shadow: var(--shadow); margin-top: 14px; }
+  /* Tre steg langs en sti */
+  .steps { list-style: none; margin: 0; padding: 0; position: relative; }
+  .steps::before { content: ""; position: absolute; left: 25px; top: 30px; bottom: 30px; border-left: 2px dashed var(--line); }
+  .steps li { position: relative; display: grid; grid-template-columns: 52px 1fr; gap: 14px; margin-bottom: 14px; }
+  .steps .dot { width: 52px; height: 52px; border-radius: 16px; background: var(--forest); color: var(--card);
+    display: grid; place-items: center; position: relative; z-index: 1; box-shadow: 0 0 0 5px var(--bg); }
+  .steps .dot svg { width: 26px; height: 26px; }
+  .steps .txt { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .steps h3 { margin: 0 0 4px; font-size: 18px; }
+  .steps p { margin: 0; color: var(--muted); font-size: 16px; }
 
-  ol.steps { list-style: none; padding: 0; margin: 16px 0 0; counter-reset: s; }
-  ol.steps > li { counter-increment: s; position: relative; background: var(--card); border: 1px solid var(--line);
-    border-radius: 16px; padding: 18px 20px 18px 70px; margin-bottom: 12px; box-shadow: var(--shadow); }
-  ol.steps > li::before { content: counter(s); position: absolute; left: 18px; top: 18px; width: 36px; height: 36px;
-    border-radius: 50%; background: var(--accent); color: var(--card); font-weight: 700;
-    display: grid; place-items: center; font-size: 17px; }
-  ol.steps p { margin: 0; color: var(--muted); }
+  /* Varselet på låseskjermen */
+  .phone { background: linear-gradient(160deg, #2f5d47, #18352a 70%); border-radius: 30px; padding: 22px 14px 18px;
+    box-shadow: var(--shadow); color: #fff; }
+  .phone .time { text-align: center; font: 600 54px/1 var(--sans); letter-spacing: -.02em; margin: 6px 0 2px; }
+  .phone .date { text-align: center; opacity: .8; font-size: 15px; margin-bottom: 18px; }
+  .notif { background: rgba(255,255,255,.86); color: #1d2a23; border-radius: 18px; padding: 12px 14px; backdrop-filter: blur(8px); }
+  .notif .top { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #5d6a62; }
+  .notif .top i { width: 20px; height: 20px; border-radius: 6px; background: #24533e; display: grid; place-items: center; }
+  .notif .top i svg { width: 12px; height: 12px; }
+  .notif .top span:last-child { margin-left: auto; }
+  .notif b { display: block; margin-top: 6px; font-size: 15px; }
+  .notif p { margin: 2px 0 0; font-size: 14px; color: #3c4a42; }
+  .email-card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px; margin-top: 14px; box-shadow: var(--shadow); }
+  .email-card h4 { font-family: var(--serif); font-size: 21px; margin: 0 0 6px; }
+  .email-card p { margin: 0 0 14px; color: var(--muted); font-size: 15px; }
+  .email-card .book { display: block; text-align: center; background: var(--rust); color: #fff; font-weight: 700; border-radius: 12px; padding: 13px; }
+  .email-card .links { text-align: center; margin-top: 10px; font-size: 14px; color: var(--muted); }
+  .hint { font-size: 15px; color: var(--muted); margin: 12px 4px 0; }
 
-  .mail { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
-    box-shadow: var(--shadow); margin-top: 14px; }
-  .mail .meta { padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--muted); }
-  .mail .meta b { color: var(--text); font-weight: 600; }
-  .mail .body { padding: 16px 18px 18px; }
-  .mail .body h4 { margin: 0 0 8px; font-size: 18px; }
-  .mail .body p { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
-  .mail .fake-btn { display: block; text-align: center; background: var(--warm); color: #fff; font-weight: 700;
-    border-radius: 10px; padding: 12px; }
-  .mail .small { margin-top: 10px; font-size: 14px; color: var(--muted); text-align: center; }
-
-  details { background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin-top: 12px;
-    box-shadow: var(--shadow); }
-  summary { cursor: pointer; padding: 16px 20px; font-weight: 600; list-style: none; display: flex;
-    justify-content: space-between; align-items: center; }
+  /* Utvidbare seksjoner */
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 18px; margin-top: 10px; box-shadow: var(--shadow); }
+  summary { cursor: pointer; padding: 16px 18px; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 12px; }
   summary::-webkit-details-marker { display: none; }
-  summary::after { content: "+"; font-size: 22px; color: var(--accent); line-height: 1; }
-  details[open] summary::after { content: "–"; }
-  details > div { padding: 0 20px 18px; }
-  details ol { padding-left: 22px; margin: 6px 0; }
-  details li { margin-bottom: 6px; }
+  summary .ico { width: 36px; height: 36px; border-radius: 10px; background: var(--moss); color: var(--forest); display: grid; place-items: center; flex: none; }
+  summary .ico svg { width: 20px; height: 20px; }
+  summary .chev { margin-left: auto; width: 20px; height: 20px; color: var(--muted); transition: transform .2s; }
+  details[open] summary .chev { transform: rotate(180deg); }
+  details .in { padding: 0 18px 18px 66px; }
+  details ol { padding-left: 18px; margin: 0; }
+  details li { margin-bottom: 8px; }
+  details p { margin: 8px 0 0; }
 
-  table { width: 100%; border-collapse: collapse; font-size: 16px; }
-  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
-  tr:last-child td { border-bottom: 0; }
-  code { background: var(--code); border-radius: 6px; padding: 2px 6px; font-size: .92em;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word; }
-  .note { font-size: 15px; color: var(--muted); }
-  footer { margin-top: 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+  /* Datoeksempler som brikker */
+  .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  @media (min-width: 560px) { .grid { grid-template-columns: 1fr 1fr; } }
+  .ex { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .ex code { display: inline-block; background: var(--code); border-radius: 8px; padding: 3px 9px; font: 600 15px var(--sans); color: var(--text); }
+  .ex p { margin: 8px 0 0; color: var(--muted); font-size: 15px; }
+  .ex.wide { grid-column: 1 / -1; }
+
+  .replies { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
+  .replies div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--line); align-items: baseline; }
+  .replies div:first-child { border-top: 0; }
+  .replies code { background: var(--code); border-radius: 8px; padding: 3px 9px; font: 600 15px var(--sans); justify-self: start; }
+  .replies span { color: var(--muted); font-size: 16px; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; background: var(--code); border-radius: 6px; padding: 1px 5px; }
+
+  footer { margin: 64px 0 0; padding: 26px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  footer p { margin: 0 0 8px; }
 </style>
 </head>
 <body>
-<main>
-  <header>
-    <div class="mark">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 26 16 6l12 20z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M12.5 26v-6h7v6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>
-      Hyttevarsel
+
+<header class="hero">
+  <div class="wrap">
+    <div class="brand"><i><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linejoin="round"><path d="M3 19 12 5l9 14z"/><path d="M9.5 19v-4h5v4"/></svg></i>Hyttevarsel</div>
+    <h1>Full hytte?<br><em>Vi sier fra</em> når den blir ledig.</h1>
+    <p class="lead">Send hyttelenken på e-post. Når noen avbestiller, får du en e-post med en knapp rett til bestillingen.</p>
+  </div>
+  <svg class="landscape" viewBox="0 0 400 170" preserveAspectRatio="none" aria-hidden="true">
+    <circle cx="320" cy="62" r="22" fill="#f2b872" opacity=".85"/>
+    <path d="M0 110 60 58l40 30 52-58 58 62 40-34 60 52 50-36 40 30V170H0z" fill="#9cbfa8" opacity=".55"/>
+    <path d="M150 30l-14 16h28z M262 52l-10 10h20z" fill="#fff" opacity=".7"/>
+    <path d="M0 130 70 86l50 32 70-48 60 46 50-30 100 56V170H0z" fill="#5e9277"/>
+    <path d="M0 150c60-18 120-22 190-12s140 4 210-14V170H0z" fill="#2f6a4f"/>
+    <g transform="translate(286 88) scale(1.15)">
+      <path d="M0 18V8l11-9 11 9v10z" fill="#c2552c"/>
+      <path d="M-2 9 11-2l13 11" fill="none" stroke="#7c2f17" stroke-width="2.2" stroke-linejoin="round"/>
+      <rect x="8" y="10" width="6" height="8" fill="#f6e2c4"/>
+    </g>
+  </svg>
+</header>
+
+<main class="wrap">
+  <div class="addr">
+    <small>Varseladressen</small>
+    <div class="email">hyttevarsel.chaerem@gmail.com</div>
+    <div class="btns">
+      <a class="btn primary" href="hyttevarsel.vcf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Lagre kontakt</a>
+      <a class="btn soft" href="mailto:hyttevarsel.chaerem@gmail.com?subject=Oversikt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Min oversikt</a>
     </div>
-    <h1>Få beskjed når hytta blir ledig</h1>
-    <p class="lead">Er hytta full? Send lenken til Hyttevarsel. Du får en e-post i det noen avbestiller, med en knapp rett til bestillingen.</p>
-    <div class="address">
-      <code>hyttevarsel.chaerem@gmail.com</code>
-      <a class="btn ghost" href="hyttevarsel.vcf">Lagre som kontakt</a>
-    </div>
-  </header>
+  </div>
 
   <section>
-    <h2>Slik gjør du</h2>
-    <p>Ingen app, ingen innlogging. Bare e-post.</p>
+    <p class="eyebrow">Slik gjør du</p>
+    <h2>Tre steg, bare e-post</h2>
+    <p class="sub">Ingen app og ingen innlogging.</p>
     <ol class="steps">
-      <li>
-        <h3>Finn hytta og datoene</h3>
-        <p>Åpne hytta på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a>, velg datoer og antall personer, akkurat som når du bestiller. Ser du at det er fullt, går du videre.</p>
-      </li>
-      <li>
-        <h3>Del lenken med Hyttevarsel</h3>
-        <p>Trykk <b>Del</b> og send lenken på e-post til Hyttevarsel. Du trenger ikke skrive noe, for datoene ligger i lenken.</p>
-      </li>
-      <li>
-        <h3>Vent på e-posten</h3>
-        <p>Etter et minutt får du en bekreftelse på hva det følges med på. Når noen avbestiller, kommer varselet.</p>
-      </li>
+      <li><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19 12 5l9 14z"/><path d="M9.5 19v-4h5v4"/></svg></span>
+        <div class="txt"><h3>Finn hytta</h3><p>Åpne hytta på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a>. Velg datoer og antall personer, som når du bestiller.</p></div></li>
+      <li><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></span>
+        <div class="txt"><h3>Del lenken</h3><p>Trykk <b>Del</b> og send lenken til Hyttevarsel. Du trenger ikke skrive noe, for datoene ligger i lenken.</p></div></li>
+      <li><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span>
+        <div class="txt"><h3>Vent på varselet</h3><p>Om et minutt kommer en bekreftelse. Når noen avbestiller, kommer varselet.</p></div></li>
     </ol>
   </section>
 
   <section>
-    <h2>Slik ser varselet ut</h2>
-    <p>Plassen kan bli tatt fort, så det lønner seg å være rask.</p>
-    <div class="mail" aria-label="Eksempel på varsel">
-      <div class="meta"><b>Hyttevarsel</b> · Ledig: Skåla lør 12. juli</div>
-      <div class="body">
-        <h4>Ledig nå: Skåla</h4>
-        <p>Det er blitt plass til 2 personer. Skåla fra lørdag 12. juli, 1 natt.</p>
-        <span class="fake-btn">Bestill nå</span>
-        <div class="small">Jeg har booket · Slutt å følge med</div>
+    <p class="eyebrow">Når det blir ledig</p>
+    <h2>Ett trykk til bestilling</h2>
+    <p class="sub">Plassen kan bli tatt fort, så vær rask.</p>
+    <div class="phone" aria-label="Eksempel på varsel">
+      <div class="time">07:42</div>
+      <div class="date">lørdag 5. juli</div>
+      <div class="notif">
+        <div class="top"><i><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"><path d="M3 19 12 5l9 14z"/></svg></i><span>Mail · Hyttevarsel</span><span>nå</span></div>
+        <b>Ledig: Skåla lør 12. juli</b>
+        <p>Det er blitt plass til 2 personer. Andre ser det samme …</p>
       </div>
     </div>
-    <p class="note">«Bestill nå» åpner DNT-siden med datoene fylt inn. «Jeg har booket» stopper varslene for den hytta.</p>
-  </section>
-
-  <section>
-    <h2>Gjør det med ett trykk</h2>
-    <p>Lag en «Følg med»-knapp i delingsmenyen én gang, så slipper du å skrive mottaker.</p>
-
-    <details>
-      <summary>iPhone</summary>
-      <div>
-        <ol>
-          <li>Åpne <b>Snarveier</b> og trykk <b>+</b>. Kall snarveien «Følg med på hytta».</li>
-          <li>Trykk <b>ⓘ</b> og slå på <b>Vis i delingsark</b>. La den ta imot <b>URL-er</b> og <b>Safari-nettsider</b>.</li>
-          <li>Legg til handlingen <b>Send e-post</b>. Mottaker: Hyttevarsel. Emne: «Følg med». Innhold: <b>Snarveisinndata</b>.</li>
-          <li>Trykk pilen på handlingen og slå <b>av</b> «Vis skjema for e-post».</li>
-        </ol>
-        <p class="note">Nå heter det bare Del → <b>Følg med på hytta</b>. Snarveien sender med Mail-appen, så e-postkontoen din må være lagt inn der.</p>
-      </div>
-    </details>
-
-    <details>
-      <summary>Android</summary>
-      <div>
-        <p>Del en lenke med Gmail til Hyttevarsel én gang. Etterpå dukker Hyttevarsel opp øverst i delingsmenyen, og da er det bare Del → <b>Hyttevarsel</b> → Send.</p>
-      </div>
-    </details>
-  </section>
-
-  <section>
-    <h2>Fleksible datoer</h2>
-    <p>Skriv i emnefeltet når du sender lenken. Du får varsel for hver dato som blir ledig.</p>
-    <div class="card">
-      <table>
-        <thead><tr><th>Du skriver</th><th>Det følges med på</th></tr></thead>
-        <tbody>
-          <tr><td><code>12. juli</code></td><td>én natt med ankomst 12. juli</td></tr>
-          <tr><td><code>12.–14. juli</code></td><td>ankomst 12., avreise 14. juli</td></tr>
-          <tr><td><code>en natt mellom 10. og 20. juli</code></td><td>hver ankomstdag i perioden</td></tr>
-          <tr><td><code>lørdager i august</code></td><td>alle lørdager i august</td></tr>
-          <tr><td><code>helger i juni</code></td><td>alle fredager og lørdager i juni</td></tr>
-          <tr><td><code>2 personer</code>, <code>3 netter</code></td><td>antall personer og netter</td></tr>
-          <tr><td>flere hyttelenker</td><td>en rute, én natt på hver hytte i rekkefølge, med varsel når hele ruta er ledig</td></tr>
-        </tbody>
-      </table>
+    <div class="email-card">
+      <h4>Ledig nå: Skåla</h4>
+      <p>Skåla fra lørdag 12. juli, 1 natt, 2 personer.</p>
+      <span class="book">Bestill nå</span>
+      <div class="links">Jeg har booket · Slutt å følge med</div>
     </div>
-    <p class="note">Glemte du datoene, spør Hyttevarsel «Hvilken dato?». Da svarer du bare med datoen.</p>
+    <p class="hint">«Bestill nå» åpner DNT-siden med datoene fylt inn. «Jeg har booket» stopper varslene for den hytta.</p>
   </section>
 
   <section>
-    <h2>Svar du kan sende</h2>
-    <div class="card">
-      <table>
-        <tbody>
-          <tr><td><code>stopp</code></td><td>svar på et varsel for å slutte å følge med på den hytta</td></tr>
-          <tr><td><code>stopp alt</code></td><td>stopper alle</td></tr>
-          <tr><td><code>oversikt</code></td><td>du får lista over alt du følger med på</td></tr>
-        </tbody>
-      </table>
+    <p class="eyebrow">Enda enklere</p>
+    <h2>«Følg med» i delingsmenyen</h2>
+    <p class="sub">Gjør det én gang, så holder det med ett trykk.</p>
+    <details>
+      <summary><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></span>iPhone<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary>
+      <div class="in">
+        <ol>
+          <li>Åpne <b>Snarveier</b> og trykk <b>+</b>. Kall den «Følg med på hytta».</li>
+          <li>Trykk <b>ⓘ</b> og slå på <b>Vis i delingsark</b> (URL-er og Safari-nettsider).</li>
+          <li>Legg til <b>Send e-post</b>. Mottaker: Hyttevarsel. Innhold: <b>Snarveisinndata</b>.</li>
+          <li>Slå <b>av</b> «Vis skjema for e-post».</li>
+        </ol>
+        <p>Nå er det bare Del → <b>Følg med på hytta</b>. Snarveien sender fra Mail-appen, så e-postkontoen din må ligge der.</p>
+      </div>
+    </details>
+    <details>
+      <summary><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 5h4"/></svg></span>Android<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary>
+      <div class="in"><p>Del en lenke med Gmail til Hyttevarsel én gang. Etterpå ligger Hyttevarsel øverst i delingsmenyen: Del → <b>Hyttevarsel</b> → Send.</p></div>
+    </details>
+  </section>
+
+  <section>
+    <p class="eyebrow">Fleksible datoer</p>
+    <h2>Skriv det i emnefeltet</h2>
+    <p class="sub">Du får varsel for hver dato som blir ledig.</p>
+    <div class="grid">
+      <div class="ex"><code>12. juli</code><p>Én natt med ankomst 12. juli.</p></div>
+      <div class="ex"><code>12.–14. juli</code><p>Ankomst 12., avreise 14. juli.</p></div>
+      <div class="ex"><code>en natt mellom 10. og 20. juli</code><p>Første ledige natt i perioden.</p></div>
+      <div class="ex"><code>lørdager i august</code><p>Alle lørdager i august.</p></div>
+      <div class="ex"><code>helger i juni</code><p>Alle fredager og lørdager i juni.</p></div>
+      <div class="ex"><code>2 personer</code> <code>3 netter</code><p>Antall personer og netter.</p></div>
+      <div class="ex wide"><code>flere lenker i én e-post</code><p>En hytte-til-hytte-rute, én natt på hver i rekkefølge. Varselet kommer når hele ruta er ledig.</p></div>
     </div>
-    <p class="note">Hver søndag kveld kommer en kort oversikt. Gamle datoer rydder seg selv.</p>
+    <p class="hint">Glemte du datoene, spør Hyttevarsel «Hvilken dato?». Svar bare med datoen.</p>
   </section>
 
   <section>
-    <h2>Slutt å følge med av seg selv</h2>
-    <p>Valgfritt: videresend ordrebekreftelsene fra DNT til Hyttevarsel, så stopper varslene for hytta du har bestilt.</p>
+    <p class="eyebrow">Svar du kan sende</p>
+    <h2>Styr alt med ett ord</h2>
+    <div class="replies">
+      <div><code>stopp</code><span>Svar på et varsel for å slutte å følge med på den hytta.</span></div>
+      <div><code>stopp alt</code><span>Stopper alle.</span></div>
+      <div><code>oversikt</code><span>Lista over alt du følger med på. Den kommer også hver søndag kveld.</span></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Valgfritt</p>
+    <h2>Stopper av seg selv når du har booket</h2>
+    <p class="sub">Videresend ordrebekreftelsene fra DNT til Hyttevarsel.</p>
     <details>
-      <summary>Hotmail / Outlook</summary>
-      <div>
-        <ol>
-          <li>Gå til <a href="https://outlook.live.com/mail/0/options/mail/rules">Regler i Outlook på nett</a>.</li>
-          <li><b>Legg til ny regel</b>: når avsender inneholder <code>dnt.no</code>, <b>videresend</b> til Hyttevarsel.</li>
-        </ol>
-      </div>
+      <summary><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span>Hotmail / Outlook<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary>
+      <div class="in"><ol>
+        <li>Åpne <a href="https://outlook.live.com/mail/0/options/mail/rules">Regler i Outlook på nett</a>.</li>
+        <li><b>Legg til ny regel</b>: når avsender inneholder <code>dnt.no</code>, <b>videresend</b> til Hyttevarsel.</li>
+      </ol></div>
     </details>
     <details>
-      <summary>Gmail</summary>
-      <div>
-        <ol>
-          <li>Innstillinger → <b>Se alle innstillinger</b> → <b>Videresending og POP/IMAP</b> → legg til Hyttevarsel som videresendingsadresse.</li>
-          <li>Søk etter <code>from:dnt.no</code> → <b>Opprett filter</b> → <b>Videresend til</b> Hyttevarsel.</li>
-        </ol>
-      </div>
+      <summary><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span>Gmail<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary>
+      <div class="in"><ol>
+        <li>Innstillinger → <b>Se alle innstillinger</b> → <b>Videresending og POP/IMAP</b>: legg til Hyttevarsel.</li>
+        <li>Søk etter <code>from:dnt.no</code> → <b>Opprett filter</b> → <b>Videresend til</b> Hyttevarsel.</li>
+      </ol></div>
     </details>
-    <p class="note">Kommer det ingen «Booket! God tur»-e-post etter at du har bestilt, trykker du «Jeg har booket» i varselet i stedet.</p>
+    <p class="hint">Kommer det ingen «Booket! God tur»-e-post etter at du har bestilt, trykker du «Jeg har booket» i varselet i stedet.</p>
   </section>
 
   <footer>
-    Hyttevarsel hører bare på e-post fra deg, og bare når e-posttjenesten din bekrefter at den virkelig kommer fra deg. Den sjekker ledigheten hos DNT omtrent hvert 2. minutt de siste ti dagene før ankomst, og sjeldnere lenger fram. Hyttevarsel er et privat hobbyprosjekt og har ingen tilknytning til DNT.
+    <p>Hyttevarsel hører bare på e-post fra deg, og bare når e-posttjenesten din bekrefter at den virkelig kommer fra deg.</p>
+    <p>Ledigheten sjekkes hvert 2. minutt de siste ti dagene før ankomst, når de fleste avbestiller, og sjeldnere lenger fram.</p>
+    <p>Et privat hobbyprosjekt uten tilknytning til DNT.</p>
   </footer>
 </main>
 </body>
