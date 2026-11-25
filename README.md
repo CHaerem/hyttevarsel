@@ -70,8 +70,9 @@ volumet (`lenke`), så det aldri går gjennom git, chat eller loggen. Det
 står i stien og ikke i en informasjonskapsel, så lenken virker som
 bokmerke og på hjemskjermen. Sidene sendes med `Referrer-Policy:
 no-referrer`, `Cache-Control: no-store` og en streng CSP. Med
-`SEND_LINK=on` sender tjenesten lenken til `MAIL_TO` én gang, når siden
-svarer på `BASE_URL/healthz`, og legger den deretter nederst i varslene.
+`SEND_LINK=on` sender tjenesten lenken til `MAIL_TO` én gang, og legger
+den deretter nederst i varslene. Sett den først når siden er åpnet utenfra
+og prøvd: tjenesten kan ikke selv se om lenken virker på internett.
 Ny lenke: slett fila `lenke` og `link_sent` i `watches.json`, og start på
 nytt.
 
@@ -131,7 +132,7 @@ time). `/healthz` sier bare om løkka går, for en omstart fikser ikke DNT.
 | `PAGE_URL` | GitHub Pages-siden | oppskriften det lenkes til i e-postene |
 | `SECRET_LINK` | | `on` legger siden bak en hemmelig personlig lenke |
 | `BASE_URL` | | den offentlige adressen til siden, uten sti; trengs for å sende lenken |
-| `SEND_LINK` | | `on` sender lenken til `MAIL_TO` når siden svarer utenfra |
+| `SEND_LINK` | | `on` sender lenken til `MAIL_TO`, én gang |
 | `WELCOME` | | `off` slår av velkomst-e-posten |
 | `VARSEL_AGENT_DIR` | | mappe med `url` og `token` til varselagenten |
 

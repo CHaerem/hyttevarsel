@@ -172,26 +172,24 @@ func TestSecretLink(t *testing.T) {
 	}
 }
 
-func TestLinkMailWaitsUntilReachable(t *testing.T) {
+func TestLinkMailSentOnce(t *testing.T) {
 	_, store, _, sent, m := setup(t)
-	up := false
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !up {
-			http.Error(w, "nei", http.StatusBadGateway)
+	m.AppURL = func() string {
+		if store.LinkSent() {
+			return "https://eksempel.ts.net/hemmelig/"
 		}
-	}))
-	defer ts.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // én runde, uten å vente et minutt
-	RunLink(ctx, store, m, "https://eksempel.ts.net/hemmelig/", ts.URL+"/healthz", ts.Client())
-	if len(sent.msgs) != 0 || store.LinkSent() {
-		t.Fatal("lenken skal ikke sendes før siden svarer")
+		return ""
 	}
-	up = true
-	RunLink(context.Background(), store, m, "https://eksempel.ts.net/hemmelig/", ts.URL+"/healthz", ts.Client())
-	RunLink(context.Background(), store, m, "https://eksempel.ts.net/hemmelig/", ts.URL+"/healthz", ts.Client())
+	if m.appLink() != nil {
+		t.Fatal("lenken skal ikke stå i e-postene før hun har fått den")
+	}
+	RunLink(context.Background(), store, m, "https://eksempel.ts.net/hemmelig/")
+	RunLink(context.Background(), store, m, "https://eksempel.ts.net/hemmelig/")
 	if got := sent.subjects(); len(got) != 1 || !strings.Contains(sent.msgs[0].HTML, `href="https://eksempel.ts.net/hemmelig/"`) || !store.LinkSent() {
 		t.Fatalf("vil ha lenken sendt én gang: %v", got)
+	}
+	if l := m.appLink(); len(l) != 1 || l[0].Label != "Mine varsler" {
+		t.Fatalf("lenken skal stå i senere e-poster: %v", l)
 	}
 
 	dir := t.TempDir()

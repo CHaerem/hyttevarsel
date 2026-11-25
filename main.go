@@ -73,8 +73,8 @@ func main() {
 
 	// SECRET_LINK=on legger siden bak en hemmelig personlig lenke (web.go).
 	// Lenken lages her første gang og ligger i volumet, så den aldri går
-	// gjennom git, chat eller loggen. SEND_LINK=on sender den til MAIL_TO
-	// når siden svarer på BASE_URL.
+	// gjennom git, chat eller loggen. SEND_LINK=on sender den til MAIL_TO,
+	// og settes først når siden er åpnet utenfra og prøvd.
 	token, appURL := "", ""
 	if os.Getenv("SECRET_LINK") == "on" {
 		if token, err = loadOrCreateToken(cmp.Or(os.Getenv("DATA_DIR"), "data")); err != nil {
@@ -97,8 +97,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if appURL != "" && os.Getenv("SEND_LINK") == "on" && os.Getenv("SMTP_HOST") != "" && len(mailer.To) > 0 {
-		health := strings.TrimRight(os.Getenv("BASE_URL"), "/") + "/healthz"
-		go RunLink(ctx, store, mailer, appURL, health, &http.Client{Timeout: 15 * time.Second})
+		go RunLink(ctx, store, mailer, appURL)
 	}
 	go poller.Run(ctx)
 	go cabins.Run(ctx)

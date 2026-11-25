@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"mime"
 	"net"
-	"net/http"
 	"regexp"
 	"slices"
 	"strconv"
@@ -513,38 +512,23 @@ func (h *MailHandler) askDate(ctx context.Context, in Incoming, legs []Leg) {
 	}
 }
 
-// RunLink sender lenken til «Mine varsler» én gang, når siden svarer på
-// den offentlige adressen. Før den gjør det, ville lenken vært død.
-func RunLink(ctx context.Context, store *Store, m *Mailer, appURL, healthURL string, client *http.Client) {
+// RunLink sender lenken til «Mine varsler» én gang, og prøver igjen til
+// e-posten er sendt. Den slås på med SEND_LINK=on først når siden er åpnet
+// utenfra og prøvd: fra en pod i klusteret går ts.net-navnet til
+// tailnettet, så tjenesten kan ikke selv se om lenken virker på internett.
+func RunLink(ctx context.Context, store *Store, m *Mailer, appURL string) {
 	for !store.LinkSent() {
-		if reachable(ctx, client, healthURL) {
-			if err := m.Link(ctx, appURL); err != nil {
-				slog.Error("e-posten med lenken feilet", "err", err)
-			} else {
-				slog.Info("lenken til Mine varsler er sendt", "to", m.To)
-				store.SetLinkSent()
-				return
-			}
+		if err := m.Link(ctx, appURL); err != nil {
+			slog.Error("e-posten med lenken feilet", "err", err)
 		} else {
-			slog.Info("venter med lenken: siden svarer ikke utenfra ennå")
+			slog.Info("lenken til Mine varsler er sendt", "to", m.To)
+			store.SetLinkSent()
+			return
 		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Minute):
+		case <-time.After(10 * time.Minute):
 		}
 	}
-}
-
-func reachable(ctx context.Context, client *http.Client, healthURL string) bool {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
-	if err != nil {
-		return false
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	return resp.StatusCode == http.StatusOK
 }
