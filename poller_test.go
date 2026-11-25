@@ -91,7 +91,7 @@ func expire(store *Store, id int) {
 }
 
 func TestNotifyOnceOnTransition(t *testing.T) {
-	f, store, p, sent, _ := setup(t)
+	f, store, p, sent, m := setup(t)
 	ctx := context.Background()
 	w, err := AddWatch(ctx, store, p, Watch{Guests: 2, Legs: []Leg{{CabinID: 1, Nights: 1}}, Starts: []string{future(40)}})
 	if err != nil {
@@ -100,9 +100,11 @@ func TestNotifyOnceOnTransition(t *testing.T) {
 	if w.Legs[0].CabinName != "Hytte nr 1" {
 		t.Errorf("navn %q", w.Legs[0].CabinName)
 	}
-	if len(sent.msgs) != 0 {
-		t.Fatalf("fullt skal ikke varsle: %v", sent.subjects())
+	Announce(ctx, store, p, m, w, "")
+	if got := sent.subjects(); len(got) != 1 || !strings.HasPrefix(got[0], "Følger med: Hytte nr 1") {
+		t.Fatalf("fullt skal gi én bekreftelse: %v", got)
 	}
+	sent.msgs = nil
 
 	f.set(1, future(40), 1) // én plass, men de er to
 	expire(store, w.ID)
@@ -116,15 +118,16 @@ func TestNotifyOnceOnTransition(t *testing.T) {
 	p.Round(ctx)
 	expire(store, w.ID)
 	p.Round(ctx)
-	if got := sent.subjects(); len(got) != 1 || !strings.HasPrefix(got[0], "Ledig: Hytte nr 1") || !strings.HasSuffix(got[0], fmt.Sprintf("[#%d]", w.ID)) {
+	if got := sent.subjects(); len(got) != 1 || !strings.HasPrefix(got[0], "Ledig: Hytte nr 1") || strings.Contains(got[0], "#") {
 		t.Fatalf("vil ha ett varsel, fikk %v", got)
 	}
-	m := sent.msgs[0]
-	if !strings.Contains(m.HTML, "Bestill nå") || !strings.Contains(m.HTML, "mailto:varsel@example.com?") || !strings.Contains(m.HTML, "subject=Stopp%20%5B%23") {
-		t.Errorf("varselet mangler knappene:\n%s", m.HTML)
+	msg := sent.msgs[0]
+	stop := fmt.Sprintf("mailto:varsel%%2Bh%d@example.com?", w.ID)
+	if !strings.Contains(msg.HTML, "Bestill nå") || !strings.Contains(msg.HTML, stop) || msg.ReplyTo != fmt.Sprintf("varsel+h%d@example.com", w.ID) {
+		t.Errorf("varselet mangler knappene eller svaradressen (%q):\n%s", msg.ReplyTo, msg.HTML)
 	}
-	if !strings.Contains(m.Text, "hyttebestilling.dnt.no/hytte/1?adults=2&fromDate="+future(40)) {
-		t.Errorf("varselet mangler bestillingslenken:\n%s", m.Text)
+	if !strings.Contains(msg.Text, "hyttebestilling.dnt.no/hytte/1?adults=2&fromDate="+future(40)) {
+		t.Errorf("varselet mangler bestillingslenken:\n%s", msg.Text)
 	}
 }
 
@@ -174,6 +177,7 @@ func TestCadenceOnlyCallsDue(t *testing.T) {
 	if _, err := AddWatch(ctx, store, p, Watch{Guests: 1, Legs: []Leg{{CabinID: 1, Nights: 1}}, Starts: []string{future(100)}}); err != nil {
 		t.Fatal(err)
 	}
+	p.Round(ctx)
 	before := f.calls
 	p.Round(ctx) // nettopp sjekket; neste om 15 min
 	if f.calls != before {

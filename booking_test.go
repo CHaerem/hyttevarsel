@@ -57,7 +57,7 @@ func TestBookingConfirmationStopsWatch(t *testing.T) {
 	if len(store.List()) != 0 {
 		t.Fatal("bekreftelsen skulle stoppe overvåkingen")
 	}
-	if got := sent.subjects(); len(got) != 1 || !strings.HasPrefix(got[0], "Booket: Hytte nr 8") || sent.msgs[0].To[0] != "kristine@example.com" {
+	if got := sent.subjects(); len(got) != 1 || !strings.HasPrefix(got[0], "Stoppet: Hytte nr 8") || sent.msgs[0].To[0] != "kristine@example.com" {
 		t.Fatalf("vil ha melding til Kristine, fikk %v %v", got, sent.msgs)
 	}
 	_ = w

@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ type Incoming struct {
 	Text      string
 	MessageID string
 	Verified  bool // Gmail har bekreftet avsenderen (DMARC eller DKIM)
+	WatchID   int  // fra «+h<id>» i mottakeradressen (Mailer.watchAddr), ellers 0
 }
 
 // Inbox henter uleste e-poster over IMAP og merker dem lest når de er
@@ -82,6 +84,7 @@ func (in *Inbox) Fetch(ctx context.Context, handle func(Incoming)) error {
 
 var (
 	dmarcPass = regexp.MustCompile(`(?i)\bdmarc=pass\b`)
+	plusTag   = regexp.MustCompile(`\+h(\d+)@`)
 	dkimPass  = regexp.MustCompile(`(?i)\bdkim=pass\b[^;]*header\.(?:i|d)=@?([^\s;]+)`)
 )
 
@@ -101,6 +104,11 @@ func ParseIncoming(raw []byte, authServ string) (Incoming, error) {
 	}
 	in.Subject, _ = h.Subject()
 	in.MessageID = h.Get("Message-Id")
+	for _, k := range []string{"To", "Cc", "Delivered-To", "X-Original-To"} {
+		if m := plusTag.FindStringSubmatch(strings.Join(h.Values(k), " ")); m != nil && in.WatchID == 0 {
+			in.WatchID, _ = strconv.Atoi(m[1])
+		}
+	}
 	for _, ar := range h.Values("Authentication-Results") {
 		if !strings.HasPrefix(strings.TrimSpace(strings.ToLower(ar)), strings.ToLower(authServ)) {
 			continue
@@ -183,9 +191,10 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 	}
 	now := time.Now()
 
-	// En ordrebekreftelse: fra DNT selv (filteret hennes videresender den),
+	// En ordrebekreftelse: fra DNT selv (et filter hos henne sender den hit),
 	// eller videresendt for hånd, med DNTs avsenderlinje i teksten.
-	if fromDNT || dntSenderLine.MatchString(in.Text) {
+	forwardedDNT := dntSenderLine.MatchString(in.Text)
+	if fromDNT || forwardedDNT {
 		if booked := MatchBooking(h.Store.List(), in.Subject, in.Text, now); len(booked) > 0 {
 			for _, w := range booked {
 				h.Store.Delete(w.ID)
@@ -196,13 +205,13 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 			}
 			return
 		}
-	}
-	if fromDNT {
+		// Annen e-post fra DNT (nyhetsbrev, kvitteringer) skal aldri gi svar
+		// eller bli tolket som en hyttelenke.
 		log.Info("e-post fra DNT uten treff på en overvåking")
 		return
 	}
 
-	req, err := ParseMessage(in.Subject, in.Text, now)
+	req, err := ParseMessage(in.Subject, in.Text, in.WatchID, now)
 	reply := func(lines ...string) {
 		if err := h.Mailer.Reply(ctx, in.From, in.Subject, in.MessageID, lines...); err != nil {
 			log.Error("svar feilet", "err", err)
@@ -215,32 +224,28 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 		h.askDate(ctx, in, req.Watch.Legs)
 		return
 	case errors.Is(err, ErrHelp):
-		reply(append([]string{"Jeg fant ingen hyttelenke i e-posten din."}, helpLines...)...)
+		if err := h.Mailer.Help(ctx, in.From, in.Subject, in.MessageID); err != nil {
+			log.Error("svar feilet", "err", err)
+		}
 		return
 	case err != nil:
-		reply("Jeg fikk ikke lagt inn hytta: "+err.Error()+".", helpLines[1])
+		reply("Hytta ble ikke lagt inn: " + err.Error() + ".")
 		return
 	}
 
 	switch req.Kind {
 	case ReqStop:
-		w, ok := h.Store.Get(req.WatchID)
-		if !ok {
-			reply(fmt.Sprintf("Jeg følger ikke med på %s lenger, så det er allerede stoppet.", fmt.Sprintf("[#%d]", req.WatchID)))
-			return
-		}
-		h.Store.Delete(w.ID)
-		log.Info("stoppet", "watch", w.ID)
-		reply("Ok, jeg slutter å følge med på " + w.Title() + " " + tag(w) + ". God tur!")
+		h.stop(ctx, in, req, now)
 	case ReqStopAll:
 		n := 0
 		for _, w := range h.Store.List() {
 			h.Store.Delete(w.ID)
 			n++
 		}
-		reply(fmt.Sprintf("Ok, jeg har stoppet alle (%d).", n))
+		log.Info("stoppet alle", "count", n)
+		reply(fmt.Sprintf("Hyttevarsel følger ikke lenger med på noe (%d stoppet).", n))
 	case ReqList:
-		if err := h.Mailer.Summary(ctx, []string{in.From}, h.Store.List(), in.MessageID, "Re: "+in.Subject); err != nil {
+		if err := h.Mailer.Summary(ctx, []string{in.From}, h.Store.List(), in.MessageID, replySubject(in.Subject)); err != nil {
 			log.Error("oversikt feilet", "err", err)
 		}
 	case ReqAdd:
@@ -248,19 +253,112 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 		w.Requester = in.From
 		w, err := AddWatch(ctx, h.Store, h.Poller, w)
 		if err != nil {
-			reply("Jeg fikk ikke lagt inn hytta: " + err.Error() + ".")
+			reply("Hytta ble ikke lagt inn: " + err.Error() + ".")
 			return
 		}
 		log.Info("ny overvåking fra e-post", "watch", w.ID, "title", w.Title())
-		if err := h.Mailer.Confirm(ctx, w, in.MessageID); err != nil {
-			log.Error("bekreftelse feilet", "err", err)
-		}
-		h.Poller.Evaluate(ctx, w.ID)
+		Announce(ctx, h.Store, h.Poller, h.Mailer, w, in.MessageID)
 	}
 }
 
-// AddWatch slår opp navnene, lagrer og sjekker med en gang. Felles for
-// nettsiden og e-post.
+// stop finner hvilken overvåking «stopp» gjelder: den svaret kom til, den
+// hun nevner ved navn, eller den eneste hun har. Ellers spør vi.
+func (h *MailHandler) stop(ctx context.Context, in Incoming, req Request, now time.Time) {
+	log := slog.With("from", in.From, "subject", in.Subject)
+	reply := func(lines ...string) {
+		if err := h.Mailer.Reply(ctx, in.From, in.Subject, in.MessageID, lines...); err != nil {
+			log.Error("svar feilet", "err", err)
+		}
+	}
+	var target *Watch
+	if req.WatchID > 0 {
+		w, ok := h.Store.Get(req.WatchID)
+		if !ok {
+			reply("Den er allerede stoppet.")
+			return
+		}
+		target = &w
+	} else {
+		var active, named []Watch
+		text := normalize(req.Text)
+		for _, w := range h.Store.List() {
+			if w.Expired(now) {
+				continue
+			}
+			active = append(active, w)
+			for _, l := range w.Legs {
+				if l.CabinName != "" && containsAny(text, nameForms(l.CabinName)) {
+					named = append(named, w)
+					break
+				}
+			}
+		}
+		switch {
+		case len(active) == 0:
+			reply("Du følger ikke med på noen hytter nå.")
+			return
+		case len(named) == 1:
+			target = &named[0]
+		case len(active) == 1:
+			target = &active[0]
+		default:
+			if err := h.Mailer.WhichToStop(ctx, in.From, active, in.Subject, in.MessageID); err != nil {
+				log.Error("svar feilet", "err", err)
+			}
+			return
+		}
+	}
+	h.Store.Delete(target.ID)
+	log.Info("stoppet", "watch", target.ID, "title", target.Title())
+	if err := h.Mailer.Stopped(ctx, in.From, *target, in.Subject, in.MessageID); err != nil {
+		log.Error("svar feilet", "err", err)
+	}
+}
+
+// Announce sender den første e-posten for en ny overvåking. Få datoer
+// sjekkes først, så hun får ett svar: enten «følger med» eller «ledig nå».
+// Mange datoer bekreftes med en gang og sjekkes i bakgrunnen.
+func Announce(ctx context.Context, store *Store, p *Poller, m *Mailer, w Watch, inReplyTo string) {
+	const quick = 6 // kall mot DNT vi lar henne vente på
+	if len(w.Starts)*len(w.Legs) > quick {
+		if err := m.Confirm(ctx, w, inReplyTo, true); err != nil {
+			slog.Error("bekreftelse feilet", "watch", w.ID, "err", err)
+		}
+		go func() {
+			bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
+			defer cancel()
+			p.CheckWatch(bg, w.ID)
+			p.Evaluate(bg, w.ID)
+		}()
+		return
+	}
+	p.CheckWatch(ctx, w.ID)
+	w, ok := store.Get(w.ID)
+	if !ok {
+		return
+	}
+	var free []string
+	for _, s := range w.ActiveStarts(time.Now()) {
+		if w.OptionFree(s) {
+			free = append(free, s)
+		}
+	}
+	if len(free) == 0 {
+		if err := m.Confirm(ctx, w, inReplyTo, false); err != nil {
+			slog.Error("bekreftelse feilet", "watch", w.ID, "err", err)
+		}
+		return
+	}
+	if err := m.AvailableNow(ctx, w, free, inReplyTo); err != nil {
+		// Ikke merket som varslet, så neste runde prøver igjen.
+		slog.Error("varsel feilet", "watch", w.ID, "err", err)
+		return
+	}
+	p.MarkNotified(w.ID, free)
+}
+
+// AddWatch slår opp navnene og lagrer. Announce sjekker og svarer. Felles
+// for nettsiden og e-post.
 func AddWatch(ctx context.Context, store *Store, p *Poller, w Watch) (Watch, error) {
 	now := time.Now()
 	if err := w.Init(now); err != nil {
@@ -280,16 +378,10 @@ func AddWatch(ctx context.Context, store *Store, p *Poller, w Watch) (Watch, err
 		}
 		w.Legs[i].CabinName = name
 	}
-	w, err := store.Add(w)
-	if err != nil {
-		return Watch{}, err
-	}
-	p.CheckWatch(ctx, w.ID)
-	w, _ = store.Get(w.ID)
-	return w, nil
+	return store.Add(w)
 }
 
-// RunInbox sjekker innboksen hvert minutt.
+// RunInbox sjekker innboksen hvert halve minutt.
 func RunInbox(ctx context.Context, in *Inbox, h *MailHandler) {
 	for {
 		if err := in.Fetch(ctx, func(m Incoming) { h.Handle(ctx, m) }); err != nil {
@@ -298,7 +390,26 @@ func RunInbox(ctx context.Context, in *Inbox, h *MailHandler) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(time.Minute):
+		case <-time.After(30 * time.Second):
+		}
+	}
+}
+
+// RunWelcome sender velkomst-e-posten én gang, og prøver igjen til den er
+// sendt.
+func RunWelcome(ctx context.Context, store *Store, m *Mailer) {
+	for !store.WelcomeSent() {
+		if err := m.Welcome(ctx); err != nil {
+			slog.Error("velkomst-e-posten feilet", "err", err)
+		} else {
+			slog.Info("velkomst-e-post sendt", "to", m.To)
+			store.SetWelcomeSent()
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(10 * time.Minute):
 		}
 	}
 }
@@ -351,9 +462,9 @@ func (h *MailHandler) askDate(ctx context.Context, in Incoming, legs []Leg) {
 	}
 	subject := fmt.Sprintf("Hvilken dato for %s? %s", strings.Join(names, " → "), HytteTag(links))
 	err := h.Mailer.Ask(ctx, in.From, subject, in.MessageID,
-		"Hvilken dato vil du følge med på for "+strings.Join(names, " → ")+"?",
+		"Lenken til "+strings.Join(names, " → ")+" hadde ingen datoer.",
 		"Svar på denne e-posten med datoen, for eksempel «12. juli», «12.–14. juli, 2 personer» eller «en natt mellom 10. og 20. juli».",
-		"Tips: velger du datoene på DNT-siden før du deler lenken, følger de med automatisk.")
+		"Velger du datoene på DNT-siden før du deler lenken, følger de med av seg selv.")
 	if err != nil {
 		slog.Error("spørsmål om dato feilet", "err", err)
 	}

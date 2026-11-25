@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Message er en utgående e-post: ren tekst og HTML med samme innhold.
@@ -25,48 +26,82 @@ type Message struct {
 	Text      string
 	HTML      string
 	InReplyTo string // Message-ID vi svarer på
+	ReplyTo   string // der svaret skal gå, se watchAddr
 }
 
 type Sender interface {
 	Send(ctx context.Context, m Message) error
 }
 
-// Mailer lager e-postene. Address er varseladressen hun svarer til.
+// Mailer lager e-postene. Tonen er nøktern, og utseendet følger
+// oppskriftssiden (docs/index.html): samme farger, én knapp per handling.
 type Mailer struct {
 	Sender  Sender
-	Address string   // f.eks. hyttevarsel@gmail.com
+	Address string   // varseladressen, f.eks. hyttevarsel@gmail.com
 	To      []string // mottakere av varsler og oppsummering
-	BaseURL string   // nettsiden på tailnettet, valgfri
+	PageURL string   // oppskriftssiden, valgfri
 }
 
-func (m *Mailer) mailto(subject, body string) string {
-	return "mailto:" + m.Address + "?" + strings.ReplaceAll(url.Values{"subject": {subject}, "body": {body}}.Encode(), "+", "%20")
+// watchAddr er svaradressen for én overvåking: varseladressen med «+h<id>».
+// Gmail leverer pluss-adresser til samme innboks, så et svar forteller
+// hvilken hytte det gjelder uten at et nummer må stå i emnet.
+func (m *Mailer) watchAddr(w Watch) string {
+	local, domain, ok := strings.Cut(m.Address, "@")
+	if !ok {
+		return m.Address
+	}
+	return fmt.Sprintf("%s+h%d@%s", local, w.ID, domain)
+}
+
+func mailto(addr, subject, body string) string {
+	// «+» i adressen skrives %2B, så ingen e-postklient leser det som mellomrom.
+	return "mailto:" + strings.ReplaceAll(addr, "+", "%2B") + "?" + strings.ReplaceAll(url.Values{"subject": {subject}, "body": {body}}.Encode(), "+", "%20")
+}
+
+func (m *Mailer) stopURL(w Watch) string {
+	return mailto(m.watchAddr(w), "Stopp", "Slutt å følge med.")
+}
+
+// page er oppskriftssiden med varseladressen i ankeret. Siden selv er uten
+// adresse; den leser ankeret og fyller den inn for den som kom herfra.
+func (m *Mailer) page() string {
+	if m.PageURL == "" {
+		return ""
+	}
+	return m.PageURL + "#til=" + m.Address
 }
 
 type mailLink struct{ Label, URL string }
 
+type mailRow struct{ Title, Detail, Status, StopURL string }
+
 type mailData struct {
 	Heading string
 	Lines   []string
+	Rows    []mailRow
 	Buttons []mailLink // store knapper
 	Links   []mailLink // små lenker under
 	Footer  string
 }
 
 var mailHTML = template.Must(template.New("mail").Parse(`<!doctype html>
-<html lang="nb"><body style="margin:0;padding:0;background:#f6f5f1;font-family:-apple-system,'Segoe UI',sans-serif;color:#1d2321">
-<div style="max-width:560px;margin:0 auto;padding:20px 16px">
-<h1 style="font-size:20px;margin:0 0 12px">{{.Heading}}</h1>
-{{range .Lines}}<p style="font-size:16px;line-height:1.45;margin:0 0 10px">{{.}}</p>{{end}}
-{{range .Buttons}}<p style="margin:14px 0"><a href="{{.URL}}" style="display:block;background:#c8102e;color:#ffffff;text-decoration:none;font-weight:600;font-size:17px;text-align:center;padding:14px 18px;border-radius:10px">{{.Label}}</a></p>{{end}}
-{{if .Links}}<p style="font-size:15px;margin:18px 0 0">{{range $i, $l := .Links}}{{if $i}} · {{end}}<a href="{{$l.URL}}" style="color:#5f6b66">{{$l.Label}}</a>{{end}}</p>{{end}}
-{{with .Footer}}<p style="font-size:13px;color:#5f6b66;margin:22px 0 0">{{.}}</p>{{end}}
-</div></body></html>`))
+<html lang="nb"><body style="margin:0;padding:0;background:#f3f0eb;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#26221f">
+<div style="max-width:520px;margin:0 auto;padding:24px 18px">
+<h1 style="font-size:21px;line-height:1.25;margin:0 0 12px">{{.Heading}}</h1>
+{{range .Lines}}<p style="font-size:16px;line-height:1.5;margin:0 0 10px">{{.}}</p>
+{{end}}{{range .Rows}}<div style="border-top:1px solid #e3ddd4;padding:12px 0"><div style="font-size:16px;font-weight:600">{{.Title}}</div><div style="font-size:15px;line-height:1.45;color:#6a625b">{{.Detail}}</div><div style="font-size:15px;margin-top:2px">{{.Status}}{{if .StopURL}} · <a href="{{.StopURL}}" style="color:#2d5a45">Stopp</a>{{end}}</div></div>
+{{end}}{{range .Buttons}}<p style="margin:14px 0"><a href="{{.URL}}" style="display:block;background:#2d5a45;color:#ffffff;text-decoration:none;font-weight:700;font-size:17px;text-align:center;padding:14px 18px;border-radius:12px">{{.Label}}</a></p>
+{{end}}{{if .Links}}<p style="font-size:15px;margin:16px 0 0;text-align:center">{{range $i, $l := .Links}}{{if $i}} &nbsp;·&nbsp; {{end}}<a href="{{$l.URL}}" style="color:#2d5a45">{{$l.Label}}</a>{{end}}</p>
+{{end}}{{with .Footer}}<p style="font-size:13px;line-height:1.45;color:#6a625b;margin:24px 0 0;border-top:1px solid #e3ddd4;padding-top:12px">{{.}}</p>
+{{end}}</div></body></html>`))
 
 func render(d mailData) (text, html string) {
 	var t strings.Builder
 	for _, l := range d.Lines {
 		t.WriteString(l + "\n\n")
+	}
+	for _, r := range d.Rows {
+		fmt.Fprintf(&t, "%s\n%s\n%s\n\n", r.Title, r.Detail, r.Status)
 	}
 	for _, b := range append(append([]mailLink{}, d.Buttons...), d.Links...) {
 		fmt.Fprintf(&t, "%s:\n%s\n\n", b.Label, b.URL)
@@ -81,85 +116,176 @@ func render(d mailData) (text, html string) {
 	return t.String(), h.String()
 }
 
-func tag(w Watch) string { return fmt.Sprintf("[#%d]", w.ID) }
-
-func (m *Mailer) stopLinks(w Watch) []mailLink {
-	return []mailLink{
-		{"Jeg har booket", m.mailto("Stopp "+tag(w), "Jeg har booket, du kan slutte å følge med.")},
-		{"Slutt å følge med", m.mailto("Stopp "+tag(w), "Slutt å følge med.")},
-	}
+func (m *Mailer) send(ctx context.Context, to []string, subject, inReplyTo, replyTo string, d mailData) error {
+	text, html := render(d)
+	return m.Sender.Send(ctx, Message{To: to, Subject: subject, Text: text, HTML: html, InReplyTo: inReplyTo, ReplyTo: replyTo})
 }
 
-func (m *Mailer) footer() string {
-	f := "Svar «stopp» på denne e-posten for å slutte å følge med. Ny hytte: del lenken fra hyttebestilling.dnt.no til " + m.Address + "."
-	if m.BaseURL != "" {
-		f += " Oversikt: " + m.BaseURL
+func replySubject(subject string) string {
+	if replyPrefix.MatchString(subject) {
+		return subject
 	}
-	return f
+	return "Re: " + subject
+}
+
+// Welcome er den første e-posten. Den forteller hva adressen er til, og er
+// samtidig testen på at e-post herfra kommer fram (og ikke i søppelpost).
+func (m *Mailer) Welcome(ctx context.Context) error {
+	d := mailData{
+		Heading: "Hyttevarsel er klart",
+		Lines: []string{
+			"Hyttevarsel følger med på fulle DNT-hytter og sender deg en e-post når noen avbestiller.",
+			"Slik legger du til en hytte: velg datoer og antall personer på hyttebestilling.dnt.no, trykk Del, og send lenken til denne adressen.",
+			"Lagre avsenderen som kontakt og slå på varsler for den, så ser du varselet med en gang. Lå denne e-posten i søppelpost, marker den som «ikke søppelpost».",
+		},
+		Footer: "Varsler kommer fra " + m.Address + ". Tjenesten er privat og svarer bare deg.",
+	}
+	if p := m.page(); p != "" {
+		d.Buttons = []mailLink{{"Slik bruker du Hyttevarsel", p}}
+	}
+	return m.send(ctx, m.To, "Hyttevarsel er klart", "", "", d)
 }
 
 // Available varsler om startdatoer som nettopp ble ledige.
 func (m *Mailer) Available(ctx context.Context, w Watch, starts []string) error {
+	return m.available(ctx, w, starts, "", false)
+}
+
+// AvailableNow er svaret når hytta hun nettopp la inn allerede er ledig:
+// én e-post i stedet for bekreftelse og varsel rett etter hverandre.
+func (m *Mailer) AvailableNow(ctx context.Context, w Watch, starts []string, inReplyTo string) error {
+	return m.available(ctx, w, starts, inReplyTo, true)
+}
+
+func (m *Mailer) available(ctx context.Context, w Watch, starts []string, inReplyTo string, justAdded bool) error {
 	d := mailData{Heading: "Ledig nå: " + w.Title()}
-	if w.IsRoute() {
-		d.Lines = append(d.Lines, fmt.Sprintf("Hele ruta har plass til %s. Bestill hver hytte, helst med en gang:", personer(w.Guests)))
-	} else {
-		d.Lines = append(d.Lines, fmt.Sprintf("Det er blitt plass til %s. Andre ser det samme, så det lønner seg å være rask.", personer(w.Guests)))
+	switch {
+	case w.IsRoute():
+		d.Lines = append(d.Lines, fmt.Sprintf("Hele turen har plass til %s. Alle hyttene må bestilles for at turen skal gå opp.", personer(w.Guests)))
+	case justAdded:
+		d.Lines = append(d.Lines, fmt.Sprintf("Det er allerede plass til %s, så du kan bestille med en gang.", personer(w.Guests)))
+	default:
+		d.Lines = append(d.Lines, fmt.Sprintf("Det er blitt plass til %s. Andre ser den ledige plassen også, så det lønner seg å bestille med en gang.", personer(w.Guests)))
+	}
+	if len(starts) == 1 && !w.IsRoute() {
+		from, _ := w.Legs[0].Stay(starts[0])
+		d.Lines = append(d.Lines, fmt.Sprintf("%s, %s.", capitalize(norskDato(from)), netter(w.Legs[0].Nights)))
+	}
+	if justAdded && len(starts) < len(w.Starts) {
+		d.Lines = append(d.Lines, "Hyttevarsel følger med på de andre datoene.")
 	}
 	for _, s := range starts {
-		for _, l := range w.Legs {
+		for i, l := range w.Legs {
 			from, to := l.Stay(s)
 			label := "Bestill nå"
-			if w.IsRoute() || len(starts) > 1 {
-				label = fmt.Sprintf("Bestill %s, %s", l.Name(), kortDato(from))
+			switch {
+			case w.IsRoute():
+				label = fmt.Sprintf("%d av %d: %s, %s", i+1, len(w.Legs), l.Name(), kortDato(from))
+			case len(starts) > 1:
+				label = "Bestill " + kortDato(from)
 			}
 			d.Buttons = append(d.Buttons, mailLink{label, BookingURL(l.CabinID, from, to, w.Guests)})
 		}
 	}
-	if len(starts) == 1 {
-		d.Lines = append(d.Lines, StayText(w, starts[0]))
+	d.Links = []mailLink{
+		{"Jeg har booket", mailto(m.watchAddr(w), "Stopp", "Jeg har booket.")},
+		{"Slutt å følge med", m.stopURL(w)},
 	}
-	d.Links = m.stopLinks(w)
-	d.Footer = m.footer()
-	text, html := render(d)
-	subject := fmt.Sprintf("Ledig: %s %s %s", w.Title(), kortDato(parseDate(starts[0])), tag(w))
-	return m.Sender.Send(ctx, Message{To: m.recipients(w), Subject: subject, Text: text, HTML: html})
+	d.Footer = "Du kan også svare «stopp» på denne e-posten. Blir plassen tatt før du rekker det, følger Hyttevarsel med videre."
+	first, _ := w.Legs[0].Stay(starts[0])
+	subject := fmt.Sprintf("Ledig: %s %s", w.Title(), kortDato(first))
+	if len(starts) > 1 {
+		subject += fmt.Sprintf(" og %d til", len(starts)-1)
+	}
+	return m.send(ctx, m.recipients(w), subject, inReplyTo, m.watchAddr(w), d)
 }
 
-// Confirm bekrefter en ny overvåking og sier hvordan den ble tolket.
-func (m *Mailer) Confirm(ctx context.Context, w Watch, inReplyTo string) error {
-	d := mailData{Heading: "Følger med på " + w.Title()}
-	d.Lines = append(d.Lines, Describe(w))
-	free := false
-	for _, s := range w.ActiveStarts(time.Now()) {
-		free = free || w.OptionFree(s)
-	}
-	if free {
-		d.Lines = append(d.Lines, "Det er faktisk ledig allerede nå. Du får et eget varsel med bestillingslenke.")
+// Confirm bekrefter en ny overvåking og sier hvordan e-posten ble tolket.
+// checking er sann når datoene fortsatt sjekkes (mange datoer).
+func (m *Mailer) Confirm(ctx context.Context, w Watch, inReplyTo string, checking bool) error {
+	d := mailData{Heading: "Følger med: " + w.Title(), Lines: []string{Describe(w)}}
+	if checking {
+		d.Lines = append(d.Lines, "Datoene sjekkes nå. Er noe ledig allerede, får du beskjed om et par minutter.")
 	} else {
-		d.Lines = append(d.Lines, "Det er fullt nå. Du får e-post så snart noen avbestiller.")
+		d.Lines = append(d.Lines, "Det er fullt nå. Du får e-post når noen avbestiller.")
 	}
-	d.Lines = append(d.Lines, "Stemmer ikke dette? Svar «stopp» og send lenken på nytt med datoen skrevet i emnefeltet.")
-	d.Links = m.stopLinks(w)[1:]
-	d.Footer = m.footer()
-	text, html := render(d)
-	return m.Sender.Send(ctx, Message{To: m.recipients(w), Subject: "Følger med: " + w.Title() + " " + tag(w), Text: text, HTML: html, InReplyTo: inReplyTo})
+	d.Lines = append(d.Lines, "Stemmer det ikke, svar «stopp» og send lenken på nytt med datoen i emnefeltet.")
+	d.Links = []mailLink{{"Slutt å følge med", m.stopURL(w)}}
+	if p := m.page(); p != "" {
+		d.Links = append(d.Links, mailLink{"Slik bruker du Hyttevarsel", p})
+	}
+	return m.send(ctx, m.recipients(w), "Følger med: "+w.Title()+", "+Short(w), inReplyTo, m.watchAddr(w), d)
 }
 
-// Reply svarer kort på en beskjed (stopp, feil, hjelp).
-func (m *Mailer) Reply(ctx context.Context, to, subject, inReplyTo string, lines ...string) error {
-	d := mailData{Heading: "Hyttevarsel", Lines: lines, Footer: m.footer()}
-	text, html := render(d)
-	if !strings.HasPrefix(strings.ToLower(subject), "re:") {
-		subject = "Re: " + subject
+// Stopped bekrefter at en overvåking er stoppet.
+func (m *Mailer) Stopped(ctx context.Context, to string, w Watch, subject, inReplyTo string) error {
+	d := mailData{Heading: "Stoppet: " + w.Title(), Lines: []string{
+		fmt.Sprintf("Hyttevarsel følger ikke lenger med på %s (%s).", w.Title(), Short(w)),
+		"Send lenken på nytt hvis du vil følge med igjen.",
+	}}
+	return m.send(ctx, []string{to}, replySubject(subject), inReplyTo, "", d)
+}
+
+func (m *Mailer) rows(watches []Watch, now time.Time) []mailRow {
+	var rows []mailRow
+	for _, w := range watches {
+		if w.Expired(now) {
+			continue
+		}
+		status := "Fullt"
+		if len(w.FreeStarts(now)) > 0 {
+			status = "Ledig nå"
+		}
+		rows = append(rows, mailRow{Title: w.Title(), Detail: Short(w) + ", " + personer(w.Guests), Status: status, StopURL: m.stopURL(w)})
 	}
-	return m.Sender.Send(ctx, Message{To: []string{to}, Subject: subject, Text: text, HTML: html, InReplyTo: inReplyTo})
+	return rows
+}
+
+// WhichToStop spør hvilken hun mente når «stopp» kan gjelde flere.
+func (m *Mailer) WhichToStop(ctx context.Context, to string, watches []Watch, subject, inReplyTo string) error {
+	d := mailData{
+		Heading: "Hvilken skal stoppes?",
+		Lines:   []string{"Du følger med på flere hytter. Velg den du vil slutte med."},
+		Rows:    m.rows(watches, time.Now()),
+		Footer:  "Svar «stopp alt» for å stoppe alle.",
+	}
+	return m.send(ctx, []string{to}, replySubject(subject), inReplyTo, "", d)
+}
+
+// Summary sender oversikten (ukentlig, og når hun ber om den).
+func (m *Mailer) Summary(ctx context.Context, to []string, watches []Watch, inReplyTo, subject string) error {
+	d := mailData{Heading: "Dette følger du med på", Rows: m.rows(watches, time.Now())}
+	if len(d.Rows) == 0 {
+		d.Lines = []string{"Du følger ikke med på noen hytter nå."}
+	} else {
+		d.Footer = "Trykk Stopp ved en hytte, eller svar «stopp alt» for å stoppe alle."
+	}
+	if subject == "" {
+		subject = "Hyttevarsel: oversikt"
+	}
+	return m.send(ctx, to, subject, inReplyTo, "", d)
+}
+
+// Reply svarer kort på en beskjed (feil ved innlegging o.l.).
+func (m *Mailer) Reply(ctx context.Context, to, subject, inReplyTo string, lines ...string) error {
+	return m.send(ctx, []string{to}, replySubject(subject), inReplyTo, "", mailData{Heading: "Hyttevarsel", Lines: lines})
+}
+
+// Help er svaret når e-posten ikke ga mening.
+func (m *Mailer) Help(ctx context.Context, to, subject, inReplyTo string) error {
+	d := mailData{Heading: "Fant ingen hyttelenke", Lines: []string{
+		"Send lenken til hytta fra hyttebestilling.dnt.no, med datoene valgt.",
+		"Du kan også svare «oversikt» for å se hva du følger med på, eller «stopp» for å slutte.",
+	}}
+	if p := m.page(); p != "" {
+		d.Links = []mailLink{{"Slik bruker du Hyttevarsel", p}}
+	}
+	return m.send(ctx, []string{to}, replySubject(subject), inReplyTo, "", d)
 }
 
 // Ask stiller et spørsmål med et eget emne (svaret hennes går til samme emne).
 func (m *Mailer) Ask(ctx context.Context, to, subject, inReplyTo string, lines ...string) error {
-	text, html := render(mailData{Heading: "Hyttevarsel", Lines: lines, Footer: m.footer()})
-	return m.Sender.Send(ctx, Message{To: []string{to}, Subject: subject, Text: text, HTML: html, InReplyTo: inReplyTo})
+	return m.send(ctx, []string{to}, subject, inReplyTo, "", mailData{Heading: "Hvilken dato?", Lines: lines})
 }
 
 // Booked sier fra at en ordrebekreftelse stoppet overvåkingen.
@@ -167,53 +293,14 @@ func (m *Mailer) Booked(ctx context.Context, booked []Watch) error {
 	var names []string
 	to := m.To
 	for _, w := range booked {
-		names = append(names, w.Title()+" "+tag(w))
+		names = append(names, w.Title())
 		to = m.recipients(w)
 	}
-	text, html := render(mailData{
-		Heading: "Booket! God tur",
-		Lines: []string{
-			"Jeg så ordrebekreftelsen fra DNT, så jeg har sluttet å følge med på " + strings.Join(names, " og ") + ".",
-			"Var det feil, send lenken på nytt, så følger jeg med igjen.",
-		},
-		Footer: m.footer(),
-	})
-	return m.Sender.Send(ctx, Message{To: to, Subject: "Booket: " + strings.Join(names, ", "), Text: text, HTML: html})
-}
-
-var helpLines = []string{
-	"Slik legger du til en hytte: åpne hytta på hyttebestilling.dnt.no, velg datoene og antall personer, trykk Del og send lenken hit.",
-	"Du kan også skrive datoen i emnefeltet: «12. juli», «12.–14. juli» (ankomst og avreise), «en natt mellom 10. og 20. juli» eller «lørdager i august». Skriv «2 personer» hvis dere er flere.",
-	"Flere lenker i samme e-post blir en rute med én natt på hver hytte, i rekkefølgen du limte dem inn.",
-	"Svar «stopp» på et varsel for å slutte å følge med på den hytta, «stopp alt» for alle, og «oversikt» for å se hva du følger med på.",
-}
-
-// Summary sender oversikten (ukentlig, og når hun ber om den).
-func (m *Mailer) Summary(ctx context.Context, to []string, watches []Watch, inReplyTo, subject string) error {
-	d := mailData{Heading: "Dette følger du med på"}
-	now := time.Now()
-	active := 0
-	for _, w := range watches {
-		if w.Expired(now) {
-			continue
-		}
-		active++
-		status := "fullt"
-		if free := w.FreeStarts(now); len(free) > 0 {
-			status = "LEDIG nå"
-		}
-		d.Lines = append(d.Lines, fmt.Sprintf("%s %s: %s (%s)", tag(w), w.Title(), Describe(w), status))
-	}
-	if active == 0 {
-		d.Lines = []string{"Du følger ikke med på noen hytter nå."}
-	}
-	d.Lines = append(d.Lines, "Svar «stopp» og nummeret, for eksempel «stopp [#3]», for å fjerne en.")
-	d.Footer = m.footer()
-	text, html := render(d)
-	if subject == "" {
-		subject = "Hyttevarsel: ukens oversikt"
-	}
-	return m.Sender.Send(ctx, Message{To: to, Subject: subject, Text: text, HTML: html, InReplyTo: inReplyTo})
+	d := mailData{Heading: "Stoppet: " + strings.Join(names, ", "), Lines: []string{
+		"Ordrebekreftelsen fra DNT kom, så Hyttevarsel følger ikke lenger med på " + strings.Join(names, " og ") + ".",
+		"Var det feil, send lenken på nytt.",
+	}}
+	return m.send(ctx, to, "Stoppet: "+strings.Join(names, ", "), "", "", d)
 }
 
 func (m *Mailer) recipients(w Watch) []string {
@@ -232,35 +319,73 @@ func containsFold(list []string, s string) bool {
 	return false
 }
 
-// StayText beskriver ett opphold, med alle hyttene i en rute.
-func StayText(w Watch, start string) string {
-	var parts []string
-	for _, l := range w.Legs {
-		from, _ := l.Stay(start)
-		part := fmt.Sprintf("%s fra %s, %s", l.Name(), norskDato(from), netter(l.Nights))
-		parts = append(parts, part)
+func capitalize(s string) string {
+	r := []rune(s)
+	if len(r) == 0 {
+		return s
 	}
-	return strings.Join(parts, "; ") + ", " + personer(w.Guests) + "."
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
 }
 
-// Describe forteller hvordan overvåkingen ble tolket.
+func sameNights(w Watch) bool {
+	for _, l := range w.Legs {
+		if l.Nights != w.Legs[0].Nights {
+			return false
+		}
+	}
+	return true
+}
+
+// Describe forteller i en setning hva det følges med på.
 func Describe(w Watch) string {
 	nights := netter(w.Legs[0].Nights)
 	if w.IsRoute() {
 		nights += " på hver hytte"
 	}
+	if len(w.Starts) == 1 {
+		if !w.IsRoute() {
+			from, _ := w.Legs[0].Stay(w.Starts[0])
+			return fmt.Sprintf("%s, %s, %s.", capitalize(norskDato(from)), nights, personer(w.Guests))
+		}
+		var parts []string
+		for _, l := range w.Legs {
+			from, _ := l.Stay(w.Starts[0])
+			part := l.Name() + " " + kortDato(from)
+			if !sameNights(w) {
+				part += " (" + netter(l.Nights) + ")"
+			}
+			parts = append(parts, part)
+		}
+		s := strings.Join(parts, ", ") + ". "
+		if sameNights(w) {
+			s += capitalize(nights) + ", "
+		}
+		return s + personer(w.Guests) + "."
+	}
+	if isConsecutive(w.Starts) {
+		last := w.Legs[len(w.Legs)-1]
+		_, end := last.Stay(w.Starts[len(w.Starts)-1])
+		return fmt.Sprintf("%s, %s, med ankomst hvilken som helst dag fra %s til %s (siste avreise %s). Du får varsel for hver dato som blir ledig.",
+			capitalize(nights), personer(w.Guests), kortDato(parseDate(w.Starts[0])), kortDato(parseDate(w.Starts[len(w.Starts)-1])), kortDato(end))
+	}
+	var ds []string
+	for _, s := range w.Starts {
+		ds = append(ds, kortDato(parseDate(s)))
+	}
+	return fmt.Sprintf("%s, %s, med ankomst %s. Du får varsel for hver dato som blir ledig.", capitalize(nights), personer(w.Guests), strings.Join(ds, ", "))
+}
+
+// Short er datoen i kortform, til emner og lister.
+func Short(w Watch) string {
+	first := kortDato(parseDate(w.Starts[0]))
 	switch {
 	case len(w.Starts) == 1:
-		return StayText(w, w.Starts[0])
+		return first
 	case isConsecutive(w.Starts):
-		return fmt.Sprintf("%s, %s, med ankomst en hvilken som helst dag fra %s til %s. Du får varsel for hver dato som blir ledig.",
-			nights, personer(w.Guests), kortDato(parseDate(w.Starts[0])), kortDato(parseDate(w.Starts[len(w.Starts)-1])))
+		return fmt.Sprintf("%s til %s", first, kortDato(parseDate(w.Starts[len(w.Starts)-1])))
 	default:
-		var ds []string
-		for _, s := range w.Starts {
-			ds = append(ds, kortDato(parseDate(s)))
-		}
-		return fmt.Sprintf("%s, %s, med ankomst %s. Du får varsel for hver dato som blir ledig.", nights, personer(w.Guests), strings.Join(ds, ", "))
+		return fmt.Sprintf("%d datoer fra %s", len(w.Starts), first)
 	}
 }
 
@@ -298,6 +423,9 @@ func buildMIME(from string, m Message) ([]byte, error) {
 		"Message-ID: " + newMessageID(from),
 		"MIME-Version: 1.0",
 		"Content-Type: multipart/alternative; boundary=" + mw.Boundary(),
+	}
+	if m.ReplyTo != "" {
+		h = append(h, "Reply-To: "+m.ReplyTo)
 	}
 	if m.InReplyTo != "" {
 		h = append(h, "In-Reply-To: "+m.InReplyTo, "References: "+m.InReplyTo)

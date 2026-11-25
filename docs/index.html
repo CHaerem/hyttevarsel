@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hyttevarsel</title>
 <meta name="description" content="Få e-post når en full DNT-hytte blir ledig.">
+<meta name="robots" content="noindex">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23163b2e'/%3E%3Cpath d='M8 22 16 9l8 13' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,6 +45,7 @@
   }
 
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { -webkit-text-size-adjust: 100%; }
   body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.55 var(--body); }
   a { color: var(--fjord); text-underline-offset: 3px; }
@@ -64,6 +66,7 @@
   .address code { font: 600 16px var(--body); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); padding: 8px 12px; border-radius: 10px; user-select: all; word-break: break-all; }
   .copy { font: 600 15px var(--body); color: var(--fjord); background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
   .copy[data-done] { color: var(--ink-2); }
+  .address-missing { margin: 0; font-size: 15px; color: var(--ink-2); max-width: 34em; }
 
   section { padding-block: 40px 0; }
   h2 { font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
@@ -101,6 +104,11 @@
   #m-gmail:checked ~ .mail-choice label[for="m-gmail"],
   #m-annet:checked ~ .mail-choice label[for="m-annet"] { border-color: var(--fjord); color: var(--fjord); font-weight: 700; background: var(--fjord-soft); }
   .bm { display: none; cursor: grab; }
+  .more { margin-top: 14px; }
+  .more summary { cursor: pointer; color: var(--fjord); font-weight: 600; padding: 0; display: block; }
+  .more summary::after { content: none; }
+  .more { border: 0; }
+  .more .in { padding: 10px 0 0; }
   #m-outlook:checked ~ .bm-outlook, #m-gmail:checked ~ .bm-gmail, #m-annet:checked ~ .bm-annet { display: inline-flex; }
 
   /* Varseleksempelet */
@@ -160,11 +168,12 @@
     <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20v-8l8-6 8 6v8z"/><path d="M10 20v-5h4v5"/></svg>Hyttevarsel</div>
     <h1>Varsel når en full DNT-hytte blir ledig</h1>
     <p class="lead">Send lenken til hytta på e-post. Når noen avbestiller, får du en e-post med lenke rett til bestillingen.</p>
-    <div class="address">
+    <div class="address" data-with-addr hidden>
       <span class="label">Send hyttelenkene til</span>
-      <code id="addr">hyttevarsel.chaerem@gmail.com</code>
+      <code class="addr" id="addr"></code>
       <button class="copy" type="button" id="copy">Kopier</button>
     </div>
+    <p class="address-missing" data-without-addr>Adressen du sender til, står i velkomst-e-posten fra Hyttevarsel. Åpne denne siden fra lenken der.</p>
   </div>
 </header>
 
@@ -172,14 +181,15 @@
 
   <section id="kom-i-gang">
     <h2>Kom i gang</h2>
-    <p class="sec-lead">Gjøres én gang og tar to minutter.</p>
+    <p class="sec-lead">Gjøres én gang og tar noen minutter.</p>
     <ol class="setup">
       <li>
-        <h3>Lagre Hyttevarsel som kontakt</h3>
-        <p class="why">Da dukker den opp når du deler en lenke.</p>
-        <div class="body">
-          <a class="btn" href="hyttevarsel.vcf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Lagre kontakt</a>
-        </div>
+        <h3>Finn velkomst-e-posten</h3>
+        <p class="why">Den heter «Hyttevarsel er klart». Lagre avsenderen som kontakt. Lå den i søppelpost, marker den som «ikke søppelpost», ellers havner varslene der også.</p>
+      </li>
+      <li>
+        <h3>Slå på varsler for Hyttevarsel</h3>
+        <p class="why">Ledige plasser blir tatt fort. Gjør Hyttevarsel til favoritt i Outlook eller VIP i Mail, så sier telefonen fra når e-posten kommer.</p>
       </li>
       <li>
         <h3>Lag en «Følg med»-knapp</h3>
@@ -200,53 +210,62 @@
               <li>Trykk info-knappen nederst, slå på <b>Vis i delingsark</b>, og kall snarveien <b>Følg med</b>.</li>
             </ol>
             <p class="result">Etterpå trykker du <b>Del → Følg med</b> på hyttesiden.</p>
-            <p class="aside">Snarveien sender fra Mail-appen, så e-postkontoen din må være lagt inn der.</p>
+            <p class="aside">Snarveien sender fra Mail-appen, så e-postkontoen din må være lagt inn der. Uten snarvei: trykk Del, velg e-postappen og send til Hyttevarsel.</p>
           </div>
 
           <div class="panel p-android">
             <ol>
-              <li>Trykk <b>Del</b> på hyttesiden og velg <b>Gmail</b>.</li>
+              <li>Trykk <b>Del</b> på hyttesiden og velg e-postappen din.</li>
               <li>Skriv <b>Hyttevarsel</b> som mottaker og send.</li>
             </ol>
-            <p class="result">Etterpå ligger Hyttevarsel øverst i delingsmenyen: <b>Del → Hyttevarsel → Send</b>.</p>
+            <p class="result">Etter første gang ligger Hyttevarsel som regel øverst i delingsmenyen: <b>Del → Hyttevarsel → Send</b>.</p>
           </div>
 
           <div class="panel p-pc">
-            <p style="margin-top:0">Hvilken e-post bruker du?</p>
-            <input type="radio" name="mail" id="m-outlook" checked>
-            <input type="radio" name="mail" id="m-gmail">
-            <input type="radio" name="mail" id="m-annet">
-            <div class="mail-choice"><label for="m-outlook">Hotmail / Outlook</label><label for="m-gmail">Gmail</label><label for="m-annet">E-postprogram</label></div>
-            <a class="btn bm bm-outlook" draggable="true" onclick="return false" href="javascript:void(window.open('https://outlook.live.com/mail/0/deeplink/compose?to=hyttevarsel.chaerem@gmail.com&amp;subject='+encodeURIComponent('Følg med')+'&amp;body='+encodeURIComponent(location.href)))">Følg med</a>
-            <a class="btn bm bm-gmail" draggable="true" onclick="return false" href="javascript:void(window.open('https://mail.google.com/mail/?view=cm&amp;to=hyttevarsel.chaerem@gmail.com&amp;su='+encodeURIComponent('Følg med')+'&amp;body='+encodeURIComponent(location.href)))">Følg med</a>
-            <a class="btn bm bm-annet" draggable="true" onclick="return false" href="javascript:void(location.href='mailto:hyttevarsel.chaerem@gmail.com?subject='+encodeURIComponent('Følg med')+'&amp;body='+encodeURIComponent(location.href))">Følg med</a>
-            <p>Dra knappen opp i <b>bokmerkelinja</b>. Ser du den ikke, trykk Ctrl+Shift+B (⌘+Shift+B på Mac).</p>
-            <p class="result">Etterpå klikker du bokmerket <b>Følg med</b> på hyttesiden. En ferdig e-post åpner seg, og du trykker <b>Send</b>.</p>
+            <ol>
+              <li>Kopier adressen fra adresselinja på hyttesiden.</li>
+              <li>Lim den inn i en e-post til Hyttevarsel og send.</li>
+            </ol>
+            <details class="more" data-with-addr hidden>
+              <summary>Eller lag et bokmerke som gjør det for deg</summary>
+              <div class="in">
+                <p style="margin-top:0">Hvilken e-post bruker du?</p>
+                <input type="radio" name="mail" id="m-outlook" checked>
+                <input type="radio" name="mail" id="m-gmail">
+                <input type="radio" name="mail" id="m-annet">
+                <div class="mail-choice"><label for="m-outlook">Hotmail / Outlook</label><label for="m-gmail">Gmail</label><label for="m-annet">E-postprogram</label></div>
+                <a class="btn bm bm-outlook" draggable="true" href="#">Følg med</a>
+                <a class="btn bm bm-gmail" draggable="true" href="#">Følg med</a>
+                <a class="btn bm bm-annet" draggable="true" href="#">Følg med</a>
+                <p>Dra knappen opp i bokmerkelinja (Ctrl+Shift+B viser den, ⌘+Shift+B på Mac). På hyttesiden klikker du bokmerket, en ferdig e-post åpner seg, og du trykker Send.</p>
+              </div>
+            </details>
           </div>
         </div>
       </li>
       <li>
         <h3>Prøv med en hytte</h3>
-        <p class="why">Velg en hytte og datoer på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a> og send den. Innen et minutt får du en bekreftelse på hva det følges med på.</p>
+        <p class="why">Velg en hytte og datoer på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a> og send den. Innen et par minutter får du svar: enten at Hyttevarsel følger med, eller at det er ledig nå.</p>
       </li>
     </ol>
   </section>
 
   <section>
     <h2>Når noen avbestiller</h2>
-    <p class="sec-lead">Da kommer en e-post som denne. Andre ser den ledige plassen også, så det lønner seg å bestille med en gang.</p>
+    <p class="sec-lead">Da kommer en e-post som denne.</p>
     <div class="alert" aria-label="Eksempel på varsel">
       <div class="head"><b>Hyttevarsel</b><span>Ledig: Skåla lør 12. juli</span></div>
       <div class="content">
         <h3>Ledig nå: Skåla</h3>
-        <p class="meta">Lørdag 12. juli, 1 natt, 2 personer <span class="moh">· 1843 moh.</span></p>
+        <p class="meta">Det er blitt plass til 2 personer. Andre ser den ledige plassen også, så det lønner seg å bestille med en gang.</p>
+        <p class="meta">Lørdag 12. juli 2027, 1 natt.</p>
         <span class="fake">Bestill nå</span>
         <div class="small"><span>Jeg har booket</span><span>Slutt å følge med</span></div>
       </div>
     </div>
     <ul class="notes">
       <li><span><b>Bestill nå</b> åpner DNT-siden med datoene og antall personer fylt inn.</span></li>
-      <li><span><b>Jeg har booket</b> stopper varslene for den hytta.</span></li>
+      <li><span><b>Jeg har booket</b> åpner et ferdig svar. Send det, så stopper varslene for den hytta. Du kan også bare svare «stopp».</span></li>
       <li><span>Blir plassen tatt før du rekker det, følger Hyttevarsel med videre.</span></li>
     </ul>
   </section>
@@ -269,54 +288,60 @@
 
   <section>
     <h2>Svar du kan sende</h2>
-    <p class="sec-lead">Svar på en e-post fra Hyttevarsel, eller send en ny.</p>
+    <p class="sec-lead">Svar på en e-post fra Hyttevarsel.</p>
     <div class="ref">
-      <div><code>stopp</code><span>Slutt å følge med på hytta i den e-posten</span></div>
+      <div><code>stopp</code><span>Slutt å følge med på hytta e-posten gjelder</span></div>
       <div><code>stopp alt</code><span>Slutt å følge med på alle</span></div>
       <div><code>oversikt</code><span>Få lista over alt du følger med på. Den kommer også hver søndag kveld.</span></div>
     </div>
   </section>
 
-  <section>
-    <details>
-      <summary>Valgfritt: stopp varslene av seg selv når du har booket</summary>
-      <div class="in">
-        <p style="margin-top:0">Videresend ordrebekreftelsene fra DNT til Hyttevarsel, så stopper varslene for hytta du har bestilt.</p>
-        <h4>Hotmail / Outlook</h4>
-        <ol>
-          <li>Åpne <a href="https://outlook.live.com/mail/0/options/mail/rules">Regler i Outlook på nett</a>.</li>
-          <li>Ny regel: når avsender inneholder <code>dnt.no</code>, videresend til Hyttevarsel.</li>
-        </ol>
-        <h4>Gmail</h4>
-        <ol>
-          <li>Innstillinger → Se alle innstillinger → Videresending og POP/IMAP: legg til Hyttevarsel.</li>
-          <li>Søk etter <code>from:dnt.no</code> → Opprett filter → Videresend til Hyttevarsel.</li>
-        </ol>
-        <p class="aside">Får du ingen bekreftelse på at varslene er stoppet, bruker du «Jeg har booket» i varselet.</p>
-      </div>
-    </details>
-  </section>
-
   <footer>
-    <p>Hyttevarsel hører bare på e-post fra deg, og bare når e-posttjenesten din bekrefter at den virkelig kommer fra deg.</p>
-    <p>Ledigheten sjekkes hvert 2. minutt de siste ti dagene før ankomst, og sjeldnere lenger fram. Et privat hobbyprosjekt uten tilknytning til DNT.</p>
+    <p>Hyttevarsel er privat og svarer bare den det er satt opp for, og bare når e-posttjenesten bekrefter avsenderen.</p>
+    <p>Ledigheten sjekkes hvert 2. minutt de siste ti dagene før ankomst, og sjeldnere lenger fram. Et hobbyprosjekt uten tilknytning til DNT.</p>
   </footer>
 </main>
 
 <script>
-  // Velg riktig enhet automatisk; radioknappene virker også uten dette.
   (function () {
+    // Riktig enhet velges automatisk; radioknappene virker også uten dette.
     var ua = navigator.userAgent || "";
     var id = /Android/i.test(ua) ? "d-android" : /iPhone|iPad|iPod/i.test(ua) ? "d-iphone" : "d-pc";
     var el = document.getElementById(id);
     if (el) el.checked = true;
-    var addr = document.getElementById("addr");
-    var btn = document.getElementById("copy");
-    var select = function () { window.getSelection().selectAllChildren(addr); };
+
+    // Varseladressen står ikke på siden. Lenken i e-postene har den i
+    // ankeret (#til=…), og nettleseren husker den til neste besøk.
+    var addr = null, m = /^#til=(.+)$/.exec(decodeURIComponent(location.hash || ""));
+    if (m && /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(m[1])) addr = m[1];
+    try {
+      if (addr) localStorage.setItem("til", addr);
+      else addr = localStorage.getItem("til");
+    } catch (e) {}
+    if (!addr || !/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(addr)) return;
+
+    document.querySelectorAll("[data-with-addr]").forEach(function (n) { n.hidden = false; });
+    document.querySelectorAll("[data-without-addr]").forEach(function (n) { n.hidden = true; });
+    var code = document.getElementById("addr"), btn = document.getElementById("copy");
+    code.textContent = addr;
+    var select = function () { window.getSelection().selectAllChildren(code); };
     btn.addEventListener("click", function () {
       var done = function () { btn.textContent = "Kopiert"; btn.setAttribute("data-done", ""); };
-      if (navigator.clipboard) navigator.clipboard.writeText(addr.textContent).then(done, select);
+      if (navigator.clipboard) navigator.clipboard.writeText(addr).then(done, select);
       else select();
+    });
+
+    // Bokmerkene åpner en ferdig e-post med adressen til siden du står på.
+    var to = encodeURIComponent(addr), subj = "encodeURIComponent('Følg med')", here = "encodeURIComponent(location.href)";
+    var marks = {
+      "bm-outlook": "javascript:void(window.open('https://outlook.live.com/mail/0/deeplink/compose?to=" + to + "&subject='+" + subj + "+'&body='+" + here + "))",
+      "bm-gmail": "javascript:void(window.open('https://mail.google.com/mail/?view=cm&to=" + to + "&su='+" + subj + "+'&body='+" + here + "))",
+      "bm-annet": "javascript:void(location.href='mailto:" + to + "?subject='+" + subj + "+'&body='+" + here + ")"
+    };
+    Object.keys(marks).forEach(function (cls) {
+      var a = document.querySelector("." + cls);
+      a.setAttribute("href", marks[cls]);
+      a.addEventListener("click", function (e) { e.preventDefault(); });
     });
   })();
   // «Prøv selv»: samme tolkning som tjenesten gjør (parse.go), i liten skala.
@@ -384,7 +409,7 @@
       if (r.starts.length > 31) return { err: "Det blir " + r.starts.length + " mulige datoer. Høyst 31 per hytte, så del perioden i to." };
       if (r.starts.length === 1) return { ok: "Ankomst " + long(r.starts[0]) + ", " + netter(r.nights) + ", " + pers(r.guests) + "." };
       var run = r.starts.every(function (t, i) { return i === 0 || +t === +add(r.starts[i - 1], 1); });
-      var when = run ? "hvilken som helst dag fra " + short(r.starts[0]) + " til " + short(r.starts[r.starts.length - 1]) + " (" + r.starts.length + " datoer)"
+      var when = run ? "hvilken som helst dag fra " + short(r.starts[0]) + " til " + short(r.starts[r.starts.length - 1]) + " (siste avreise " + short(add(r.starts[r.starts.length - 1], r.nights)) + ")"
                      : r.starts.map(short).join(", ");
       return { ok: netter(r.nights) + ", " + pers(r.guests) + ", med ankomst " + when + ". Du får varsel for hver dato som blir ledig." };
     }

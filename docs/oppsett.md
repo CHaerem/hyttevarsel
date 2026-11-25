@@ -23,14 +23,16 @@ ignorerer. Gmails bekreftelseskode for videresending (bruksanvisningen,
 curl -fsSL https://raw.githubusercontent.com/CHaerem/hyttevarsel/main/scripts/hemmeligheter.sh | bash
 ```
 
-Skriptet spør etter varseladressen, app-passordet, Kristines adresse og
-(valgfritt) tailnet-navnet for lenken til oversikten. Det prøver innloggingen mot Gmail, henter varselagentens
+Skriptet spør etter varseladressen, app-passordet og Kristines adresse.
+(Tailnet-navnet det også spør om, brukes ikke lenger; trykk Enter.) Det prøver innloggingen mot Gmail, henter varselagentens
 URL og token fra linux-4, krypterer begge hemmelighetene til eieren og
 klusteret (`.sops.yaml` i Homelab) og åpner en PR i Homelab. Merge den, så
 starter poden. Ingen verdi havner i klartekst på disk eller i argv.
 
 ## 3. Første test
 
+0. Når poden starter første gang, sender den velkomst-e-posten til
+   Kristine. Kommer den ikke fram, se i søppelposten hennes og i loggen.
 1. Send en hyttelenke fra Kristines adresse til varseladressen. Innen et
    minutt skal bekreftelsen komme.
 2. Følg med på en hytte som er ledig nå, så kommer et varsel med en gang.

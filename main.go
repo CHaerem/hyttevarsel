@@ -35,18 +35,20 @@ func main() {
 	}
 
 	user, password := os.Getenv("SMTP_USER"), os.Getenv("SMTP_PASSWORD")
-	address := cmp.Or(addrOnly(os.Getenv("MAIL_FROM")), user)
+	// Uten navn viser innboksen hennes bare adressen.
+	from := cmp.Or(os.Getenv("MAIL_FROM"), "Hyttevarsel <"+user+">")
+	address := addrOnly(from)
 	mailer := &Mailer{
 		Sender:  LogSender{},
 		Address: address,
 		To:      splitList(os.Getenv("MAIL_TO")),
-		BaseURL: os.Getenv("BASE_URL"),
+		PageURL: cmp.Or(os.Getenv("PAGE_URL"), "https://chaerem.github.io/hyttevarsel/"),
 	}
 	if host := os.Getenv("SMTP_HOST"); host != "" {
 		mailer.Sender = &SMTPSender{
 			Host: host, Port: cmp.Or(os.Getenv("SMTP_PORT"), "587"),
 			User: user, Password: password,
-			From: cmp.Or(os.Getenv("MAIL_FROM"), user),
+			From: from,
 		}
 	} else {
 		slog.Warn("SMTP_HOST er ikke satt; e-post skrives bare til loggen")
@@ -68,6 +70,9 @@ func main() {
 	defer stop()
 	go poller.Run(ctx)
 	go RunSummary(ctx, store, mailer)
+	if os.Getenv("SMTP_HOST") != "" && len(mailer.To) > 0 && os.Getenv("WELCOME") != "off" {
+		go RunWelcome(ctx, store, mailer)
+	}
 	if host := os.Getenv("IMAP_HOST"); host != "" {
 		inbox := &Inbox{
 			Addr: host + ":" + cmp.Or(os.Getenv("IMAP_PORT"), "993"),

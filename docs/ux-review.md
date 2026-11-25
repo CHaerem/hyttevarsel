@@ -3,6 +3,11 @@
 Gjennomgang av hele løpet slik Kristine møter det: oppskriftssiden, hver
 e-post tjenesten sender, svarene hun kan gi, og lenkene til DNT.
 
+**Status:** punkt 1–6, 8–11 og 13–20 er gjort i v0.2.0. Punkt 7 (ferdig
+snarvei-lenke) venter på at snarveien lages på en iPhone. Punkt 12 er
+delvis gjort: innboksen leses hvert halve minutt, og mange datoer sjekkes
+i bakgrunnen, men tjenesten lytter ikke på innboksen ennå.
+
 ## Konklusjon
 
 Kjernen er god: del en lenke, få en e-post, trykk «Bestill nå». Siden er

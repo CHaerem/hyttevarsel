@@ -193,6 +193,7 @@ type Store struct {
 type storeData struct {
 	NextID      int       `json:"next_id"`
 	Watches     []*Watch  `json:"watches"`
+	WelcomeSent bool      `json:"welcome_sent"`
 	LastSummary time.Time `json:"last_summary"`
 	LastAlarm   time.Time `json:"last_alarm"`
 }
@@ -292,6 +293,19 @@ func (s *Store) Update(id int, fn func(*Watch)) error {
 		}
 	}
 	return nil
+}
+
+func (s *Store) WelcomeSent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data.WelcomeSent
+}
+
+func (s *Store) SetWelcomeSent() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.WelcomeSent = true
+	return s.saveLocked()
 }
 
 // Meta leser og endrer tidsstemplene for oppsummering og alarm.

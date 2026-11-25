@@ -7,47 +7,49 @@ forsvinner fort. DNT har ikke noe varsel selv.
 
 ## Slik brukes den
 
-Oppskriften til Kristine: https://chaerem.github.io/hyttevarsel/ ([docs/index.html](docs/index.html), GitHub Pages fra `main:/docs`; samme innhold som tekst i [docs/bruksanvisning.md](docs/bruksanvisning.md)).
+Oppskriften til Kristine: https://chaerem.github.io/hyttevarsel/
+([docs/index.html](docs/index.html), GitHub Pages fra `main:/docs`; samme
+innhold som tekst i [docs/bruksanvisning.md](docs/bruksanvisning.md)).
 Oppsettet før første kjøring: [docs/oppsett.md](docs/oppsett.md).
+UX-gjennomgangen som formet e-postene og siden: [docs/ux-review.md](docs/ux-review.md).
 
-**Legg til en hytte:** åpne hytta på hyttebestilling.dnt.no, velg datoer og
-antall personer, trykk Del og send lenken på e-post til varseladressen.
-Datoene ligger i lenken. Du får en bekreftelse som sier hvordan e-posten ble
-tolket. Alternativt skrives datoen i emnet eller teksten:
+**Legg til en hytte:** velg datoer og antall personer på
+hyttebestilling.dnt.no, trykk Del og send lenken på e-post til
+varseladressen. Datoene og følget (voksne, ungdom og barn) leses fra
+lenken. Datoen kan også skrives i emnet eller teksten: `12. juli`,
+`12.–14. juli`, `en natt mellom 10. og 20. juli`, `lørdager i august`,
+`2 netter`, `3 personer`. Flere lenker i samme e-post blir en rute, med
+varsel når hele ruta er ledig. Mangler datoen, spør tjenesten.
 
-| Skriv | Betyr |
-|---|---|
-| `12. juli`, `12.07`, `12.07.2027` | én natt, ankomst 12. juli |
-| `12.–14. juli` | ankomst 12., avreise 14. |
-| `2 netter`, `3 personer`, `vi er 3` | antall netter og personer |
-| `en natt mellom 10. og 20. juli` | varsel for hver ankomstdag i perioden som blir ledig |
-| `lørdager i august`, `helger i juni` | alle lørdager, eller alle fredager og lørdager |
-| flere lenker i samme e-post | en rute: én natt på hver hytte, i rekkefølge; varsel når hele ruta er ledig |
+**Første svar:** én e-post. Er det fullt, en bekreftelse på hva det følges
+med på. Er det ledig allerede, varselet direkte. Mange datoer (over seks
+kall) bekreftes med en gang og sjekkes i bakgrunnen.
 
-**Varselet** har en stor «Bestill nå»-knapp med datoene og antall fylt inn,
-og «Jeg har booket» som stopper overvåkingen (en ferdig utfylt e-post).
+**Svar:** hver e-post om en hytte har svaradressen `<adresse>+h<id>@…`
+(Gmail leverer pluss-adresser til samme innboks), så `stopp` i et svar
+gjelder den hytta uten at et nummer står i emnet. `stopp` uten slik adresse
+gjelder hytta hun nevner ved navn, eller den eneste hun har; ellers får hun
+en liste med en Stopp-lenke per hytte. `stopp alt` stopper alle,
+`oversikt` gir lista. Søndag kveld kommer oversikten av seg selv.
 
-**Uten dato:** deler hun en lenke uten datoer, spør tjenesten «Hvilken dato?»
-med hytta i emnet, og hun svarer bare med datoen.
+**Velkomst:** første gang tjenesten starter med e-post satt opp, sender
+den «Hyttevarsel er klart» til `MAIL_TO` (slås av med `WELCOME=off`).
+Lenken dit har varseladressen i ankeret (`#til=…`); siden selv er uten
+adresse og ber søkemotorer la den være.
 
-**Auto-stopp:** et filter hos henne som videresender ordrebekreftelsene fra
-DNT til varseladressen gjør at overvåkingen stopper av seg selv når hun har
-bestilt. Bekreftelsen må komme fra `BOOKING_DOMAINS` (standard
-`dnt.no,visbook.com`) med bekreftet avsender, eller være videresendt av
-henne med DNTs avsenderlinje i teksten, og nevne hyttenavnet og
-ankomstdatoen til en aktiv overvåking. Gjenkjenningen er laget uten en ekte
-bekreftelse å se på (25. nov. 2026); juster `booking.go` når den finnes.
-E-post fra DNT kan bare stoppe overvåkinger, aldri legge inn.
+**Hvem blir hørt:** bare avsendere i `ALLOWED_SENDERS` (standard
+`MAIL_TO`), og bare når Gmail har bekreftet avsenderen (DMARC, eller DKIM
+for avsenderens domene). Et svar som siterer e-posten vår uten sitattegn
+blir ikke tolket (`ownText` i parse.go).
 
-**Svar på en e-post fra tjenesten:** `stopp` stopper den hytta, `stopp alt`
-stopper alle, `oversikt` gir lista. Søndag kveld kommer en ukesoppsummering.
+**Ordrebekreftelser (eksperimentelt):** e-post fra `BOOKING_DOMAINS`, eller
+videresendt med DNTs avsenderlinje i teksten, stopper overvåkingen når den
+nevner hyttenavnet og ankomstdatoen. All annen e-post fra DNT ignoreres
+uten svar. Gjenkjenningen er laget uten en ekte bekreftelse å se på, og
+står derfor ikke i oppskriften til Kristine.
 
-Bare avsendere i `ALLOWED_SENDERS` (standard `MAIL_TO`) blir lyttet til, og
-bare når Gmail har bekreftet avsenderen (DMARC, eller DKIM for avsenderens
-domene). Ellers kunne hvem som helst skrive adressen hennes i From.
-
-Nettsiden viser det samme og kan også legge inn hytter. Den har ingen
-innlogging; tailnettet er porten, den skal aldri være på internett.
+Nettsiden på tailnettet viser det samme og kan også legge inn hytter. Den
+har ingen innlogging; tailnettet er porten.
 
 ## Hvordan ledigheten hentes
 
@@ -88,12 +90,13 @@ time). `/healthz` sier bare om løkka går, for en omstart fikser ikke DNT.
 | `SMTP_HOST`, `SMTP_PORT` | –, `587` | STARTTLS. Uten `SMTP_HOST` skrives e-post til loggen |
 | `IMAP_HOST`, `IMAP_PORT` | –, `993` | innboksen. Uten `IMAP_HOST` leses den ikke |
 | `SMTP_USER`, `SMTP_PASSWORD` | | Gmail-kontoen og et app-passord, for både SMTP og IMAP |
-| `MAIL_FROM` | `SMTP_USER` | varseladressen |
+| `MAIL_FROM` | `Hyttevarsel <SMTP_USER>` | avsender; adressen er varseladressen |
 | `MAIL_TO` | | kommaseparert; varsler og oppsummering |
 | `ALLOWED_SENDERS` | `MAIL_TO` | hvem som kan legge inn og stoppe |
 | `IMAP_AUTHSERV` | `mx.google.com` | hvem sin Authentication-Results som gjelder |
 | `BOOKING_DOMAINS` | `dnt.no,visbook.com` | avsenderdomenene til ordrebekreftelsene |
-| `BASE_URL` | | nettsiden, nederst i e-postene |
+| `PAGE_URL` | GitHub Pages-siden | oppskriften det lenkes til i e-postene |
+| `WELCOME` | | `off` slår av velkomst-e-posten |
 | `VARSEL_AGENT_DIR` | | mappe med `url` og `token` til varselagenten |
 
 ## Utvikling

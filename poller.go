@@ -145,6 +145,17 @@ func (p *Poller) checkOne(ctx context.Context, d dueCheck) {
 	})
 }
 
+// MarkNotified setter startdatoene som ledige og varslet, når varselet er
+// sendt utenom Evaluate (svaret på en hytte som alt var ledig).
+func (p *Poller) MarkNotified(id int, starts []string) {
+	now := time.Now()
+	p.Store.Update(id, func(w *Watch) {
+		for _, s := range starts {
+			w.Options[s] = &Option{Free: true, LastNotified: now}
+		}
+	})
+}
+
 // Transition avgjør om en startdato har blitt ledig, og om det skal varsles.
 func Transition(o Option, free bool, now time.Time) (Option, bool) {
 	if !free {

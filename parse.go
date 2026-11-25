@@ -34,8 +34,9 @@ const (
 
 type Request struct {
 	Kind    RequestKind
-	WatchID int
-	Watch   Watch // ReqAdd: hyttene og datoene, uten navn og tilstand
+	WatchID int    // ReqStop: 0 betyr at hun ikke sa hvilken
+	Text    string // det hun skrev selv, til å finne hytta ved navn
+	Watch   Watch  // ReqAdd: hyttene og datoene, uten navn og tilstand
 }
 
 var (
@@ -57,10 +58,17 @@ func HytteTag(links []cabinLink) string {
 }
 
 var (
-	idPattern       = regexp.MustCompile(`\[#(\d+)\]`)
-	linkPattern     = regexp.MustCompile(`(?i)(?:https?://)?hyttebestilling\.dnt\.no/hytte/\d+[^\s<>"')\]]*`)
-	stopPattern     = regexp.MustCompile(`(?i)(^|[^\pL])(stopp|stop|booket|bestilt|slett|avslutt)([^\pL]|$)`)
-	allPattern      = regexp.MustCompile(`(?i)(^|[^\pL])(alt|alle)([^\pL]|$)`)
+	idPattern   = regexp.MustCompile(`\[#(\d+)\]`)
+	linkPattern = regexp.MustCompile(`(?i)(?:https?://)?hyttebestilling\.dnt\.no/hytte/\d+[^\s<>"')\]]*`)
+	// «booket» alene stopper ikke: «noen andre har booket den» er ikke et ønske om å slutte.
+	stopPattern = regexp.MustCompile(`(?i)(^|[^\pL])(stopp|stop|slett|avslutt|slutt å følge med|(jeg|vi) har (booket|bestilt))([^\pL]|$)`)
+	allPattern  = regexp.MustCompile(`(?i)(^|[^\pL])(stopp|stop|slett|avslutt)\s+(alt|alle)([^\pL]|$)`)
+	// Linjer fra våre egne e-poster, i tilfelle et svar siterer dem uten
+	// sitattegn: lenketekstene («Jeg har booket:»), mailto-lenkene og
+	// setningene med «stopp» i hermetegn. Ellers ville et «Takk!» på et
+	// varsel blitt lest som stopp, eller som en ny hyttelenke.
+	ownText         = regexp.MustCompile(`(?i)mailto:|«(stopp|oversikt)[^»]*»|/hytte/\S+\s+(bestill|\d av \d:)|^(jeg har booket|slutt å følge med|slik bruker du hyttevarsel|bestill( nå| \pL{3} \d.*)?|\d av \d: .*):$`)
+	replyPrefix     = regexp.MustCompile(`(?i)^\s*(re|sv)\s*:`)
 	listPattern     = regexp.MustCompile(`(?i)(^|[^\pL])(oversikt|liste|status)([^\pL]|$)`)
 	flexPattern     = regexp.MustCompile(`(?i)mellom|fleksib|hvilken som helst|ledig natt|når som helst`)
 	quoteHeader     = regexp.MustCompile(`(?i)^(on|den|man|tir|ons|tor|fre|lør|søn|\d).*(wrote|skrev|skreiv)( .*)?:\s*$|^-{2,}\s*(original|opprinnelig|videresendt|forwarded)|^(fra|from):\s.*@`)
@@ -121,7 +129,7 @@ func StripQuoted(body string) string {
 	var out []string
 	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
 		t := strings.TrimSpace(line)
-		if strings.HasPrefix(t, ">") || quoteHeader.MatchString(t) {
+		if strings.HasPrefix(t, ">") || quoteHeader.MatchString(t) || ownText.MatchString(t) {
 			break
 		}
 		out = append(out, line)
@@ -148,10 +156,13 @@ func parseLinks(text string) []cabinLink {
 			q := u.Query()
 			l.from, _ = time.ParseInLocation(dateLayout, q.Get("fromDate"), oslo)
 			l.to, _ = time.ParseInLocation(dateLayout, q.Get("toDate"), oslo)
-			l.guests = parseNumber(q.Get("numberOfGuests"))
-			if a := parseNumber(q.Get("adults")); a > l.guests {
-				l.guests = a
+			// DNT-siden deler følget i kategorier. Alle som skal ha seng telles;
+			// spedbarn («infants») gjør ikke det.
+			sum := 0
+			for _, k := range []string{"adults", "youthOld", "youth", "children"} {
+				sum += parseNumber(q.Get(k))
 			}
+			l.guests = max(sum, parseNumber(q.Get("numberOfGuests")))
 		}
 		if len(out) > 0 && out[len(out)-1].id == id {
 			continue // samme lenke to ganger (tekst og href)
@@ -311,21 +322,28 @@ func parseDates(text string, explicitNights int, now time.Time) (parsedDates, bo
 }
 
 // ParseMessage tolker emne og tekst fra en e-post.
-func ParseMessage(subject, body string, now time.Time) (Request, error) {
+// hint er overvåkingen svaret gjelder når e-posten kom til en «+h<id>»-adresse
+// (Mailer.watchAddr), ellers 0.
+func ParseMessage(subject, body string, hint int, now time.Time) (Request, error) {
 	body = StripQuoted(body)
-	id := 0
-	if m := idPattern.FindStringSubmatch(subject); m != nil {
-		id, _ = strconv.Atoi(m[1])
+	id := hint
+	if id == 0 {
+		// Eldre e-poster hadde nummeret i emnet («[#4]»).
+		if m := idPattern.FindStringSubmatch(subject + "\n" + body); m != nil {
+			id, _ = strconv.Atoi(m[1])
+		}
 	}
 	clean := func(s string) string {
-		return idPattern.ReplaceAllString(linkPattern.ReplaceAllString(s, " "), " ")
+		s = linkPattern.ReplaceAllString(s, " ")
+		s = idPattern.ReplaceAllString(s, " ")
+		return hytteTag.ReplaceAllString(s, " ")
 	}
-	all := clean(subject + "\n" + body)
-	// Et svar på våre e-poster har hyttenavn og dato i emnet. Da teller bare
-	// det hun skrev selv.
-	own := all
-	if id > 0 {
-		own = clean(body)
+	// I et svar er emnet vårt («Ledig: Skåla lør 12. juli», «… oversikt»).
+	// Da teller bare det hun skrev selv.
+	isReply := replyPrefix.MatchString(subject)
+	own := clean(body)
+	if !isReply {
+		own = clean(subject + "\n" + body)
 	}
 	links := parseLinks(subject + "\n" + body)
 	if m := hytteTag.FindStringSubmatch(subject); m != nil && len(links) == 0 {
@@ -335,22 +353,18 @@ func ParseMessage(subject, body string, now time.Time) (Request, error) {
 			}
 		}
 	}
-	all = hytteTag.ReplaceAllString(all, " ")
-	own = hytteTag.ReplaceAllString(own, " ")
 
-	if stopPattern.MatchString(all) {
-		switch {
-		case id > 0:
-			return Request{Kind: ReqStop, WatchID: id}, nil
-		case allPattern.MatchString(own) && len(links) == 0:
+	if stopPattern.MatchString(own) && (id > 0 || len(links) == 0) {
+		if allPattern.MatchString(own) {
 			return Request{Kind: ReqStopAll}, nil
 		}
+		return Request{Kind: ReqStop, WatchID: id, Text: own}, nil
 	}
 	if len(links) == 0 {
 		if listPattern.MatchString(own) {
 			return Request{Kind: ReqList}, nil
 		}
-		if id > 0 {
+		if isReply {
 			return Request{}, ErrIgnore
 		}
 		return Request{}, ErrHelp

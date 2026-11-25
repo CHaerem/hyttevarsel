@@ -35,8 +35,8 @@ var templates = template.Must(template.New("").Funcs(template.FuncMap{
 type Server struct {
 	Store   *Store
 	Poller  *Poller
-	Mailer  *Mailer // valgfri: bekreftelse på e-post
-	Address string  // varseladressen, vises på siden
+	Mailer  *Mailer
+	Address string // varseladressen, vises på siden
 }
 
 func (s *Server) Routes() http.Handler {
@@ -134,12 +134,7 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 		redirect(w, r, "feil", "Fikk ikke lagt inn: "+err.Error()+".")
 		return
 	}
-	if s.Mailer != nil {
-		if err := s.Mailer.Confirm(r.Context(), wa, ""); err != nil {
-			slog.Error("bekreftelse feilet", "err", err)
-		}
-	}
-	s.Poller.Evaluate(r.Context(), wa.ID)
+	Announce(r.Context(), s.Store, s.Poller, s.Mailer, wa, "")
 	redirect(w, r, "ok", "Følger nå med på "+wa.Title()+".")
 }
 
