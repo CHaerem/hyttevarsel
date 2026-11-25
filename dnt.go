@@ -78,6 +78,64 @@ func (d *DNT) Check(ctx context.Context, cabinID int, from, to time.Time) (Avail
 	return a, nil
 }
 
+type calendarResponse struct {
+	Data *struct {
+		AvailabilityList []struct {
+			Date     string `json:"date"`
+			Products []struct {
+				Available int `json:"available"`
+			} `json:"products"`
+		} `json:"availabilityList"`
+	} `json:"data"`
+	Error any `json:"error"`
+}
+
+// Calendar gir ledige enheter (rom eller senger) per natt, slik kalenderen
+// «Sjekk når hytta er ledig» på DNT-siden henter dem. Ett kall dekker
+// flere måneder (målt 25. nov. 2026: serveren svarer med mer enn det
+// spurte tidsrommet). Tallet er enheter, ikke sengeplasser: et rom med
+// seks senger teller som én. Derfor brukes kalenderen bare til å se hvor
+// noe har endret seg; Check gir det nøyaktige svaret.
+func (d *DNT) Calendar(ctx context.Context, cabinID int, from, to time.Time) (map[string]int, error) {
+	q := url.Values{}
+	q.Set("cabinId", strconv.Itoa(cabinID))
+	q.Set("fromDate", from.Format(dateLayout))
+	q.Set("toDate", to.Format(dateLayout))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, d.Base+"/api/booking/availability-calendar?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "application/json")
+	resp, err := d.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("DNT svarte %s", resp.Status)
+	}
+	var r calendarResponse
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return nil, fmt.Errorf("uventet svar fra DNT: %w", err)
+	}
+	if r.Data == nil {
+		return nil, fmt.Errorf("DNT: %v", r.Error)
+	}
+	days := map[string]int{}
+	for _, day := range r.Data.AvailabilityList {
+		if len(day.Date) < len(dateLayout) {
+			continue
+		}
+		n := 0
+		for _, p := range day.Products {
+			n += p.Available
+		}
+		days[day.Date[:len(dateLayout)]] = n
+	}
+	return days, nil
+}
+
 // BookingURL lenker rett til hyttesiden med datoene og antall voksne fylt inn.
 func BookingURL(cabinID int, from, to time.Time, guests int) string {
 	q := url.Values{}

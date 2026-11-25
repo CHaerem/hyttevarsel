@@ -58,7 +58,7 @@ func TestParseAdd(t *testing.T) {
 			[]string{"2027-01-01", "2027-01-02", "2027-01-08", "2027-01-09", "2027-01-15", "2027-01-16", "2027-01-22", "2027-01-23", "2027-01-29", "2027-01-30"}, []leg{{101022071, 0, 1}}, 1, true},
 		{"rute", "Rute 3. august, 2 personer", "https://hyttebestilling.dnt.no/hytte/111\nhttps://hyttebestilling.dnt.no/hytte/222\nhttps://hyttebestilling.dnt.no/hytte/333",
 			[]string{"2027-08-03"}, []leg{{111, 0, 1}, {222, 1, 1}, {333, 2, 1}}, 2, false},
-		{"rute med datoer i lenkene", "", "https://hyttebestilling.dnt.no/hytte/111?fromDate=2027-08-03&toDate=2027-08-04 og https://hyttebestilling.dnt.no/hytte/222?fromDate=2027-08-04&toDate=2027-08-06",
+		{"rute med datoer i lenkene", "Rute", "https://hyttebestilling.dnt.no/hytte/111?fromDate=2027-08-03&toDate=2027-08-04 og https://hyttebestilling.dnt.no/hytte/222?fromDate=2027-08-04&toDate=2027-08-06",
 			[]string{"2027-08-03"}, []leg{{111, 0, 1}, {222, 1, 2}}, 1, false},
 		{"barn og ungdom telles med", "", skåla + "?fromDate=2027-07-12&toDate=2027-07-13&adults=2&youth=1&children=1&infants=1",
 			[]string{"2027-07-12"}, []leg{{101022071, 0, 1}}, 4, false},
@@ -73,7 +73,10 @@ func TestParseAdd(t *testing.T) {
 			if r.Kind != ReqAdd {
 				t.Fatalf("kind %v", r.Kind)
 			}
-			w := r.Watch
+			if len(r.Watches) != 1 {
+				t.Fatalf("vil ha én overvåking, fikk %d", len(r.Watches))
+			}
+			w := r.Watches[0]
 			if !slices.Equal(w.Starts, tc.starts) {
 				t.Errorf("starts %v, vil ha %v", w.Starts, tc.starts)
 			}
@@ -129,10 +132,63 @@ func TestParseCommands(t *testing.T) {
 			if r.Kind != tc.kind || r.WatchID != tc.id {
 				t.Fatalf("kind %v id %d, vil ha %v %d", r.Kind, r.WatchID, tc.kind, tc.id)
 			}
-			if tc.kind == ReqAdd && !slices.Equal(r.Watch.Starts, []string{"2027-07-14"}) {
-				t.Fatalf("starts %v", r.Watch.Starts)
+			if tc.kind == ReqAdd && !slices.Equal(r.Watches[0].Starts, []string{"2027-07-14"}) {
+				t.Fatalf("starts %v", r.Watches[0].Starts)
 			}
 		})
+	}
+}
+
+func TestParseManyCabinsAndMonths(t *testing.T) {
+	three := "https://hyttebestilling.dnt.no/hytte/111\nhttps://hyttebestilling.dnt.no/hytte/222\nhttps://hyttebestilling.dnt.no/hytte/333"
+	r, err := ParseMessage("helger i juni–august, 2 personer", three, 0, parseNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Watches) != 3 {
+		t.Fatalf("vil ha tre hytter hver for seg, fikk %d", len(r.Watches))
+	}
+	for i, id := range []int{111, 222, 333} {
+		w := r.Watches[i]
+		if len(w.Legs) != 1 || w.Legs[0].CabinID != id || w.Guests != 2 || !w.Flexible {
+			t.Errorf("hytte %d: %+v", id, w)
+		}
+		// Fredager og lørdager i juni, juli og august 2027: 4+4, 5+5, 4+4.
+		if len(w.Starts) != 26 || w.Starts[0] != "2027-06-04" || w.Starts[25] != "2027-08-28" {
+			t.Errorf("hytte %d: %d datoer, %s til %s", id, len(w.Starts), w.Starts[0], w.Starts[len(w.Starts)-1])
+		}
+		if err := w.Init(parseNow); err != nil {
+			t.Errorf("hytte %d ble avvist: %v", id, err)
+		}
+	}
+
+	// Datoer i lenkene, uten «rute»: hver hytte med sin egen dato.
+	r, err = ParseMessage("", "https://hyttebestilling.dnt.no/hytte/111?fromDate=2027-08-03&toDate=2027-08-04&adults=2 https://hyttebestilling.dnt.no/hytte/222?fromDate=2027-08-10&toDate=2027-08-12", 0, parseNow)
+	if err != nil || len(r.Watches) != 2 || r.Watches[0].Starts[0] != "2027-08-03" || r.Watches[1].Starts[0] != "2027-08-10" || r.Watches[1].Legs[0].Nights != 2 || r.Watches[0].Guests != 2 {
+		t.Fatalf("lenker med egne datoer: %+v, %v", r.Watches, err)
+	}
+
+	for text, want := range map[string][2]string{
+		"lørdager i juni og juli":      {"2027-06-05", "2027-07-31"},
+		"helger i sommer":              {"2027-06-04", "2027-08-28"},
+		"lørdager i desember–februar":  {"2026-12-05", "2027-02-27"},
+		"hele juli":                    {"2027-07-01", "2027-07-31"},
+		"en natt i november":           {"2026-11-25", "2026-11-30"},
+		"fredager i august 2028":       {"2028-08-04", "2028-08-25"},
+		"søndager i juni, juli og sep": {"2027-06-06", "2027-09-26"},
+	} {
+		r, err := ParseMessage(text, skåla, 0, parseNow)
+		if err != nil || len(r.Watches) != 1 {
+			t.Errorf("%q: %v", text, err)
+			continue
+		}
+		s := r.Watches[0].Starts
+		if s[0] != want[0] || s[len(s)-1] != want[1] {
+			t.Errorf("%q: %s til %s (%d), vil ha %s til %s", text, s[0], s[len(s)-1], len(s), want[0], want[1])
+		}
+	}
+	if r, _ := ParseMessage("søndager i juni, juli og sep", skåla, 0, parseNow); len(r.Watches[0].Starts) != 12 {
+		t.Errorf("juni, juli og sep skal ikke ta med august: %v", r.Watches[0].Starts)
 	}
 }
 
@@ -163,8 +219,8 @@ func TestInitLimits(t *testing.T) {
 	for d := parseDate("2027-07-01"); d.Month() == time.July; d = d.AddDate(0, 0, 1) {
 		starts = append(starts, d.Format(dateLayout))
 	}
-	w = Watch{Guests: 1, Legs: []Leg{{CabinID: 1, Nights: 1}, {CabinID: 2, Offset: 1, Nights: 1}}, Starts: starts}
+	w = Watch{Guests: 1, Legs: []Leg{{CabinID: 1, Nights: 1}, {CabinID: 2, Offset: 1, Nights: 1}, {CabinID: 3, Offset: 2, Nights: 1}}, Starts: starts}
 	if err := w.Init(parseNow); err == nil {
-		t.Error("62 kall per runde skal avvises")
+		t.Error("93 kall per runde skal avvises")
 	}
 }

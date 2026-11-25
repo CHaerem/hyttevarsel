@@ -18,8 +18,13 @@ hyttebestilling.dnt.no, trykk Del og send lenken på e-post til
 varseladressen. Datoene og følget (voksne, ungdom og barn) leses fra
 lenken. Datoen kan også skrives i emnet eller teksten: `12. juli`,
 `12.–14. juli`, `en natt mellom 10. og 20. juli`, `lørdager i august`,
-`2 netter`, `3 personer`. Flere lenker i samme e-post blir en rute, med
-varsel når hele ruta er ledig. Mangler datoen, spør tjenesten.
+`helger i juni–august`, `helger i sommer`, `hele juli`, `2 netter`,
+`3 personer`. Mangler datoen, spør tjenesten.
+
+**Mange hytter:** flere lenker i samme e-post følges hver for seg, med de
+samme datoene, og bekreftes i én e-post. Det hun allerede følger med på,
+legges ikke inn en gang til. Skriver hun `rute`, blir lenkene i stedet en
+tur fra hytte til hytte, med varsel når hele turen er ledig.
 
 **Første svar:** én e-post. Er det fullt, en bekreftelse på hva det følges
 med på. Er det ledig allerede, varselet direkte. Mange datoer (over seks
@@ -68,7 +73,16 @@ feil og avvises når de legges til. Navnet hentes fra hyttesidens `<title>`.
 ankomst, der de fleste avbestillingene kommer, hvert 5. minutt inntil 30
 dager før, og hvert 15. minutt lenger fram (`POLL_CADENCE`). Ett kall om
 gangen med 3 sekunder mellom, og en egen User-Agent. Grenser per
-overvåking: 6 hytter, 31 startdatoer, 40 kall per runde.
+overvåking: 6 hytter i en rute, 62 startdatoer, 62 opphold.
+
+**Mange datoer for samme hytte:** fra fire opphold og opp hentes
+kalenderen i stedet (`/api/booking/availability-calendar`, den DNT-siden
+bruker i «Sjekk når hytta er ledig»): ett kall per hytte gir ledige
+enheter per natt for minst et halvt år. Kalenderen teller rom eller senger
+som enheter, ikke sengeplasser, så den brukes bare til å se hvor noe har
+endret seg. Der noe er ledig og bildet er nytt, gjøres det nøyaktige
+kallet. Ti hytter med alle helger i tre måneder blir da ti kall per runde
+i stedet for 260.
 
 **Varsel:** når en startdato går fra fullt til ledig for alle hyttene i
 den, høyst én gang i halvtimen per dato (en plass i noens handlekurv kan

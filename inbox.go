@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -249,16 +250,58 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 			log.Error("oversikt feilet", "err", err)
 		}
 	case ReqAdd:
-		w := req.Watch
-		w.Requester = in.From
-		w, err := AddWatch(ctx, h.Store, h.Poller, w)
-		if err != nil {
-			reply("Hytta ble ikke lagt inn: " + err.Error() + ".")
-			return
+		added, failed := AddAll(ctx, h.Store, h.Poller, h.Mailer, req.Watches, in.From, in.MessageID)
+		log.Info("lagt inn fra e-post", "added", len(added), "failed", len(failed))
+		if len(added) == 0 {
+			reply("Ble ikke lagt inn: " + strings.Join(failed, "; ") + ".")
 		}
-		log.Info("ny overvåking fra e-post", "watch", w.ID, "title", w.Title())
-		Announce(ctx, h.Store, h.Poller, h.Mailer, w, in.MessageID)
 	}
+}
+
+func sameWatch(a, b Watch) bool {
+	return a.Guests == b.Guests && slices.Equal(a.Starts, b.Starts) &&
+		slices.EqualFunc(a.Legs, b.Legs, func(x, y Leg) bool {
+			return x.CabinID == y.CabinID && x.Offset == y.Offset && x.Nights == y.Nights
+		})
+}
+
+// AddAll legger inn overvåkingene fra én beskjed og sender ett svar: det
+// vanlige for én hytte, en samlet liste for flere. Det hun allerede følger
+// med på, legges ikke inn en gang til.
+func AddAll(ctx context.Context, store *Store, p *Poller, m *Mailer, watches []Watch, requester, inReplyTo string) (added []Watch, failed []string) {
+	now := time.Now()
+	existing := store.List()
+	for i, w := range watches {
+		if i > 0 && !p.sleep(ctx) {
+			break
+		}
+		w.Requester = requester
+		probe := w
+		if err := probe.Init(now); err == nil {
+			if j := slices.IndexFunc(existing, func(e Watch) bool { return sameWatch(e, probe) }); j >= 0 {
+				added = append(added, existing[j])
+				continue
+			}
+		}
+		w, err := AddWatch(ctx, store, p, w)
+		if err != nil {
+			failed = append(failed, err.Error())
+			continue
+		}
+		added = append(added, w)
+	}
+	switch {
+	case len(added) == 0:
+	case len(added) == 1 && len(failed) == 0:
+		Announce(ctx, store, p, m, added[0], inReplyTo)
+	default:
+		// Mange hytter: bekreft med en gang. Pollerens neste runde sjekker
+		// dem og varsler om det som alt er ledig.
+		if err := m.ConfirmMany(ctx, added, failed, inReplyTo); err != nil {
+			slog.Error("bekreftelse feilet", "err", err)
+		}
+	}
+	return added, failed
 }
 
 // stop finner hvilken overvåking «stopp» gjelder: den svaret kom til, den
@@ -317,20 +360,14 @@ func (h *MailHandler) stop(ctx context.Context, in Incoming, req Request, now ti
 
 // Announce sender den første e-posten for en ny overvåking. Få datoer
 // sjekkes først, så hun får ett svar: enten «følger med» eller «ledig nå».
-// Mange datoer bekreftes med en gang og sjekkes i bakgrunnen.
+// Mange datoer bekreftes med en gang og sjekkes av polleren.
 func Announce(ctx context.Context, store *Store, p *Poller, m *Mailer, w Watch, inReplyTo string) {
 	const quick = 6 // kall mot DNT vi lar henne vente på
 	if len(w.Starts)*len(w.Legs) > quick {
 		if err := m.Confirm(ctx, w, inReplyTo, true); err != nil {
 			slog.Error("bekreftelse feilet", "watch", w.ID, "err", err)
 		}
-		go func() {
-			bg, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Minute)
-			defer cancel()
-			p.CheckWatch(bg, w.ID)
-			p.Evaluate(bg, w.ID)
-		}()
-		return
+		return // pollerens neste runde sjekker datoene, med kalenderen
 	}
 	p.CheckWatch(ctx, w.ID)
 	w, ok := store.Get(w.ID)

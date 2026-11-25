@@ -6,7 +6,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -122,20 +124,35 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	nights := atoiDefault(r.FormValue("netter"), 1)
-	wa := Watch{Guests: atoiDefault(r.FormValue("personer"), 1), Flexible: until.After(from)}
-	for i, l := range links {
-		wa.Legs = append(wa.Legs, Leg{CabinID: l.id, Offset: i * nights, Nights: nights})
-	}
+	guests := atoiDefault(r.FormValue("personer"), 1)
+	var starts []string
 	for d := from; !d.After(until); d = d.AddDate(0, 0, 1) {
-		wa.Starts = append(wa.Starts, d.Format(dateLayout))
+		starts = append(starts, d.Format(dateLayout))
 	}
-	wa, err = AddWatch(r.Context(), s.Store, s.Poller, wa)
-	if err != nil {
-		redirect(w, r, "feil", "Fikk ikke lagt inn: "+err.Error()+".")
+	// Flere lenker følges hver for seg, som på e-post. «Rute» gjør dem til
+	// én tur der alle må være ledige etter tur.
+	var watches []Watch
+	if r.FormValue("rute") != "" && len(links) > 1 {
+		wa := Watch{Guests: guests, Starts: starts, Flexible: len(starts) > 1}
+		for i, l := range links {
+			wa.Legs = append(wa.Legs, Leg{CabinID: l.id, Offset: i * nights, Nights: nights})
+		}
+		watches = []Watch{wa}
+	} else {
+		for _, l := range links {
+			watches = append(watches, Watch{Guests: guests, Starts: slices.Clone(starts), Flexible: len(starts) > 1, Legs: []Leg{{CabinID: l.id, Nights: nights}}})
+		}
+	}
+	added, failed := AddAll(r.Context(), s.Store, s.Poller, s.Mailer, watches, "", "")
+	if len(added) == 0 {
+		redirect(w, r, "feil", "Fikk ikke lagt inn: "+strings.Join(failed, "; ")+".")
 		return
 	}
-	Announce(r.Context(), s.Store, s.Poller, s.Mailer, wa, "")
-	redirect(w, r, "ok", "Følger nå med på "+wa.Title()+".")
+	names := make([]string, len(added))
+	for i, wa := range added {
+		names[i] = wa.Title()
+	}
+	redirect(w, r, "ok", "Følger nå med på "+strings.Join(names, ", ")+".")
 }
 
 func (s *Server) delete(w http.ResponseWriter, r *http.Request) {

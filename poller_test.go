@@ -15,9 +15,10 @@ import (
 // fakeDNT svarer med ledige plasser per «hytte/fra-dato», og med navnet i
 // <title> på hyttesiden.
 type fakeDNT struct {
-	mu    sync.Mutex
-	free  map[string]int
-	calls int
+	mu       sync.Mutex
+	free     map[string]int
+	calls    int // nøyaktige kall (cabin-availability)
+	calCalls int // kalenderkall
 }
 
 func (f *fakeDNT) set(cabin int, from string, n int) {
@@ -33,8 +34,21 @@ func (f *fakeDNT) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `<html><head><title>Hytte nr %s | DNT Hyttebestilling</title></head></html>`, id)
 		return
 	}
-	f.calls++
 	q := r.URL.Query()
+	if r.URL.Path == "/api/booking/availability-calendar" {
+		// Én enhet per ledig plass, for hver natt i det spurte tidsrommet.
+		f.calCalls++
+		from, _ := time.Parse(dateLayout, q.Get("fromDate"))
+		to, _ := time.Parse(dateLayout, q.Get("toDate"))
+		var days []string
+		for d := from; !d.After(to); d = d.AddDate(0, 0, 1) {
+			n := f.free[q.Get("cabinId")+"/"+d.Format(dateLayout)]
+			days = append(days, fmt.Sprintf(`{"date":"%sT00:00:00.000Z","products":[{"available":%d},{"available":0}]}`, d.Format(dateLayout), min(n, 1)))
+		}
+		fmt.Fprintf(w, `{"data":{"availabilityList":[%s]}}`, strings.Join(days, ","))
+		return
+	}
+	f.calls++
 	if q.Get("cabinId") == "999" {
 		w.Write([]byte(`{"error":"Couldn't fetch web products"}`))
 		return
@@ -252,5 +266,56 @@ func TestWebAddAndList(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))
 	if body := rec.Body.String(); !strings.Contains(body, "Hytte nr 5") || !strings.Contains(body, "Fullt") {
 		t.Fatalf("forsiden viser ikke overvåkingen:\n%s", body)
+	}
+}
+
+// Mange datoer for samme hytte: ett kalenderkall per runde, og et nøyaktig
+// kall bare der kalenderen viser noe ledig som er nytt.
+func TestCalendarScreening(t *testing.T) {
+	f, store, p, sent, _ := setup(t)
+	ctx := context.Background()
+	var starts []string
+	for i := 40; i < 48; i++ {
+		starts = append(starts, future(i))
+	}
+	w, err := AddWatch(ctx, store, p, Watch{Guests: 2, Flexible: true, Legs: []Leg{{CabinID: 50, Nights: 1}}, Starts: starts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	due := func() { p.cal[50].next = time.Time{} }
+
+	f.calls = 0
+	p.Round(ctx)
+	if f.calCalls != 1 || f.calls != 0 {
+		t.Fatalf("fullt: vil ha 1 kalenderkall og 0 nøyaktige, fikk %d og %d", f.calCalls, f.calls)
+	}
+	got, _ := store.Get(w.ID)
+	if c := got.Checks[checkKey(got.Legs[0], starts[3])]; c == nil || !c.Known || c.Free != 0 {
+		t.Fatalf("fulle datoer skal være kjent som fulle: %+v", c)
+	}
+	p.Round(ctx)
+	if f.calCalls != 1 {
+		t.Fatalf("kalenderen ble hentet før den var forfalt: %d", f.calCalls)
+	}
+
+	f.set(50, starts[2], 1) // én seng ledig, men de er to
+	due()
+	p.Round(ctx)
+	if f.calCalls != 2 || f.calls != 1 || len(sent.msgs) != 0 {
+		t.Fatalf("én seng: kalender %d, nøyaktige %d, e-poster %v", f.calCalls, f.calls, sent.subjects())
+	}
+	due()
+	p.Round(ctx)
+	if f.calls != 1 {
+		t.Fatalf("uendret kalender skal ikke gi nytt nøyaktig kall: %d", f.calls)
+	}
+
+	f.set(50, starts[2], 2)
+	f.set(50, starts[5], 4)
+	due()
+	p.Round(ctx)
+	// starts[2] har samme kalenderbilde (én enhet ledig), så bare starts[5] sjekkes.
+	if f.calls != 2 || len(sent.msgs) != 1 || !strings.Contains(sent.msgs[0].Text, "fromDate="+starts[5]) {
+		t.Fatalf("vil ha ett varsel for %s: nøyaktige %d, %v", starts[5], f.calls, sent.subjects())
 	}
 }

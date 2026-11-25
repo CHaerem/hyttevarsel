@@ -184,3 +184,37 @@ func TestPlusAddressAndWelcome(t *testing.T) {
 		t.Fatalf("velkomst: %v", got)
 	}
 }
+
+func TestManyCabinsInOneMail(t *testing.T) {
+	f, store, p, sent, m := setup(t)
+	p.Spacing = 0
+	h := &MailHandler{Store: store, Poller: p, Mailer: m, Allowed: []string{"kristine@example.com"}}
+	ctx := context.Background()
+	d := parseDate(future(60))
+	subject := "lørdager i " + måneder[d.Month()-1] + " " + d.Format("2006") + ", 2 personer"
+	body := "https://hyttebestilling.dnt.no/hytte/61\nhttps://hyttebestilling.dnt.no/hytte/62\nhttps://hyttebestilling.dnt.no/hytte/999\nhttps://hyttebestilling.dnt.no/hytte/63"
+	h.Handle(ctx, Incoming{From: "kristine@example.com", Verified: true, Subject: subject, Text: body, MessageID: "<3@x>"})
+
+	ws := store.List()
+	if len(ws) != 3 {
+		t.Fatalf("vil ha tre overvåkinger (hytte 999 kan ikke bestilles på nett), fikk %d", len(ws))
+	}
+	if len(sent.msgs) != 1 || sent.msgs[0].Subject != "Følger med på 3 hytter" || strings.Count(sent.msgs[0].HTML, ">Stopp</a>") != 3 ||
+		!strings.Contains(sent.msgs[0].Text, "hytte 999 kan ikke bestilles på nett") || !strings.Contains(sent.msgs[0].Text, "med ankomst lør ") {
+		t.Fatalf("vil ha én samlet bekreftelse: %v\n%s", sent.subjects(), sent.msgs[0].Text)
+	}
+
+	// Samme e-post en gang til legger ikke inn noe nytt.
+	h.Handle(ctx, Incoming{From: "kristine@example.com", Verified: true, Subject: subject, Text: body})
+	if len(store.List()) != 3 {
+		t.Fatalf("duplikater: %d overvåkinger", len(store.List()))
+	}
+
+	// En lørdag blir ledig på én av hyttene: ett varsel, for den hytta.
+	sent.msgs = nil
+	f.set(62, ws[0].Starts[1], 3)
+	p.Round(ctx)
+	if got := sent.subjects(); len(got) != 1 || !strings.HasPrefix(got[0], "Ledig: Hytte nr 62") {
+		t.Fatalf("vil ha ett varsel for hytte 62: %v", got)
+	}
+}

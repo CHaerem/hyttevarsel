@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -17,6 +18,7 @@ const notifyCooldown = 30 * time.Minute
 type Checker interface {
 	Check(ctx context.Context, cabinID int, from, to time.Time) (Availability, error)
 	CabinName(ctx context.Context, cabinID int) (string, error)
+	Calendar(ctx context.Context, cabinID int, from, to time.Time) (map[string]int, error)
 }
 
 // Notifier er det poller og innboks trenger av e-posten (mail.go).
@@ -42,6 +44,7 @@ type Poller struct {
 	failing     atomic.Bool
 	started     time.Time // når pollerens første runde gikk
 	lastNameTry time.Time
+	cal         map[int]*calState
 }
 
 // Cadence bestemmer hvor ofte et opphold sjekkes, etter dager til ankomst.
@@ -71,27 +74,131 @@ type dueCheck struct {
 	leg     Leg
 	start   string
 	next    time.Time
+	known   bool // siste sjekk ga et svar
 }
 
-func (p *Poller) due(now time.Time) []dueCheck {
-	var out []dueCheck
+// calendarMin er hvor mange opphold som må følges for samme hytte før
+// kalenderen brukes: ett kall per hytte i stedet for ett per dato.
+const calendarMin = 4
+
+// calState er det vi husker om en hyttes kalender mellom rundene.
+type calState struct {
+	next time.Time
+	sig  map[string]string // sjekknøkkel → ledige enheter per natt sist
+}
+
+// plan deler det som skal sjekkes i to: enkeltkall som er forfalt, og
+// hytter med mange datoer der kalenderen er forfalt.
+func (p *Poller) plan(now time.Time) (direct []dueCheck, calendars map[int][]dueCheck) {
+	byCabin := map[int][]dueCheck{}
 	for _, w := range p.Store.List() {
 		for _, s := range w.ActiveStarts(now) {
 			for _, l := range w.Legs {
-				k := checkKey(l, s)
-				c := w.Checks[k]
-				if c == nil || !c.NextCheck.After(now) {
-					var next time.Time
-					if c != nil {
-						next = c.NextCheck
-					}
-					out = append(out, dueCheck{w.ID, k, l, s, next})
+				d := dueCheck{watchID: w.ID, key: checkKey(l, s), leg: l, start: s}
+				if c := w.Checks[d.key]; c != nil {
+					d.next, d.known = c.NextCheck, c.Known && c.LastError == ""
 				}
+				byCabin[l.CabinID] = append(byCabin[l.CabinID], d)
 			}
 		}
 	}
-	slices.SortFunc(out, func(a, b dueCheck) int { return a.next.Compare(b.next) })
-	return out
+	calendars = map[int][]dueCheck{}
+	for cabin, checks := range byCabin {
+		keys := map[string]bool{}
+		for _, d := range checks {
+			keys[d.key] = true
+		}
+		if len(keys) >= calendarMin {
+			if st := p.cal[cabin]; st == nil || !st.next.After(now) {
+				calendars[cabin] = checks
+			}
+			continue
+		}
+		for _, d := range checks {
+			if !d.next.After(now) {
+				direct = append(direct, d)
+			}
+		}
+	}
+	slices.SortFunc(direct, func(a, b dueCheck) int { return a.next.Compare(b.next) })
+	return direct, calendars
+}
+
+// screen henter kalenderen for én hytte. Netter uten ledige enheter settes
+// som fulle uten flere kall. Opphold der noe er ledig og bildet har endret
+// seg siden sist, returneres for et nøyaktig kall (Check), som teller
+// sengeplasser.
+func (p *Poller) screen(ctx context.Context, cabin int, checks []dueCheck) (exact []dueCheck) {
+	now := time.Now()
+	if p.cal == nil {
+		p.cal = map[int]*calState{}
+	}
+	st := p.cal[cabin]
+	if st == nil {
+		st = &calState{}
+		p.cal[cabin] = st
+	}
+	lo, hi := checks[0].leg.Stay(checks[0].start)
+	for _, d := range checks {
+		from, to := d.leg.Stay(d.start)
+		if from.Before(lo) {
+			lo = from
+		}
+		if to.After(hi) {
+			hi = to
+		}
+	}
+	st.next = now.Add(p.Cadence.For(lo, now))
+	days, err := p.DNT.Calendar(ctx, cabin, lo, hi)
+	if err != nil {
+		slog.Warn("kalenderen feilet", "cabin", cabin, "err", err)
+		return nil
+	}
+	p.lastSuccess.Store(now.Unix())
+
+	sigs := map[string]string{}
+	full := map[int][]string{} // overvåking → sjekknøkler som er fulle
+	for _, d := range checks {
+		from, to := d.leg.Stay(d.start)
+		var sig strings.Builder
+		covered, free := true, true
+		for n := from; n.Before(to); n = n.AddDate(0, 0, 1) {
+			units, ok := days[n.Format(dateLayout)]
+			if !ok {
+				covered = false
+				break
+			}
+			fmt.Fprintf(&sig, "%d,", units)
+			free = free && units > 0
+		}
+		switch {
+		case !covered: // kalenderen rakk ikke så langt
+			exact = append(exact, d)
+		case !free:
+			full[d.watchID] = append(full[d.watchID], d.key)
+			sigs[d.key] = sig.String()
+		default:
+			if !d.known || st.sig[d.key] != sig.String() {
+				exact = append(exact, d)
+			}
+			sigs[d.key] = sig.String()
+		}
+	}
+	st.sig = sigs
+	slog.Info("kalender", "cabin", cabin, "opphold", len(checks), "fulle", len(checks)-len(exact), "sjekkes", len(exact))
+	for id, keys := range full {
+		p.Store.Update(id, func(w *Watch) {
+			for _, k := range keys {
+				c := w.Checks[k]
+				if c == nil {
+					c = &Check{}
+					w.Checks[k] = c
+				}
+				c.Free, c.Known, c.LastError, c.LastChecked, c.NextCheck = 0, true, "", now, st.next
+			}
+		})
+	}
+	return exact
 }
 
 // CheckWatch sjekker alle oppholdene i én overvåking med en gang (brukes når
@@ -222,16 +329,32 @@ func (p *Poller) Evaluate(ctx context.Context, id int) {
 	})
 }
 
-// Round gjør alle kallene som er forfalt, ett om gangen.
+// Round gjør alle kallene som er forfalt, ett om gangen: først kalenderne
+// for hytter med mange datoer, så enkeltkallene.
 func (p *Poller) Round(ctx context.Context) {
 	now := time.Now()
 	if p.started.IsZero() {
 		p.started = now
 	}
 	p.prune(now)
+	direct, calendars := p.plan(now)
 	touched := map[int]bool{}
-	for i, d := range p.due(now) {
-		if i > 0 && !p.sleep(ctx) {
+	calls := 0
+	pause := func() bool { // ett kall om gangen, med pause mellom
+		calls++
+		return calls == 1 || p.sleep(ctx)
+	}
+	for cabin, checks := range calendars {
+		if !pause() {
+			return
+		}
+		direct = append(direct, p.screen(ctx, cabin, checks)...)
+		for _, d := range checks {
+			touched[d.watchID] = true
+		}
+	}
+	for _, d := range direct {
+		if !pause() {
 			return
 		}
 		p.checkOne(ctx, d)

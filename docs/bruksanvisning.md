@@ -34,8 +34,10 @@ Skriv i emnefeltet når du sender lenken:
 | `12.–14. juli` | ankomst 12., avreise 14. juli |
 | `en natt mellom 10. og 20. juli` | hver ankomstdag i perioden (siste avreise 20.) |
 | `lørdager i august`, `helger i juni` | alle lørdager, eller alle fredager og lørdager |
+| `helger i juni–august`, `helger i sommer` | alle helgene i flere måneder |
+| `hele juli` | hver dag i juli |
 | `2 netter`, `3 personer` | antall netter og personer |
-| flere hyttelenker | en tur fra hytte til hytte, én natt på hver; varsel når hele turen går opp |
+| flere hyttelenker | hver hytte følges for seg, med de samme datoene. Skriv `rute` for en tur fra hytte til hytte, der alle må være ledige etter tur |
 
 Glemte du datoen, spør Hyttevarsel, og du svarer bare med datoen.
 

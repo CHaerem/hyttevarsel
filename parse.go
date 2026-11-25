@@ -20,7 +20,10 @@ import (
 //	<lenke> 12.–14. juli                      ankomst 12., avreise 14.
 //	<lenke> en natt mellom 10. og 20. juli    første ledige natt i perioden
 //	<lenke> lørdager i august                 alle lørdager
-//	<lenke> <lenke> <lenke> 12. juli          rute: én natt på hver, i rekkefølge
+//	<lenke> helger i juni–august              alle fredager og lørdager i tre måneder
+//	<lenke> hele juli                         hver dag i juli
+//	<lenke> <lenke> <lenke> 12. juli          tre hytter, fulgt hver for seg
+//	<lenke> <lenke> <lenke> rute 12. juli     rute: én natt på hver, i rekkefølge
 //	stopp [#12]                               (svar på et varsel) stopper overvåking 12
 //	stopp alt, oversikt, hjelp
 type RequestKind int
@@ -34,9 +37,10 @@ const (
 
 type Request struct {
 	Kind    RequestKind
-	WatchID int    // ReqStop: 0 betyr at hun ikke sa hvilken
-	Text    string // det hun skrev selv, til å finne hytta ved navn
-	Watch   Watch  // ReqAdd: hyttene og datoene, uten navn og tilstand
+	WatchID int     // ReqStop: 0 betyr at hun ikke sa hvilken
+	Text    string  // det hun skrev selv, til å finne hytta ved navn
+	Watches []Watch // ReqAdd: én per hytte (eller én rute), uten navn og tilstand
+	Watch   Watch   // ErrNoDate: hyttene hun sendte, så vi kan spørre om datoen
 }
 
 var (
@@ -67,7 +71,7 @@ var (
 	// sitattegn: lenketekstene («Jeg har booket:»), mailto-lenkene og
 	// setningene med «stopp» i hermetegn. Ellers ville et «Takk!» på et
 	// varsel blitt lest som stopp, eller som en ny hyttelenke.
-	ownText         = regexp.MustCompile(`(?i)mailto:|«(stopp|oversikt)[^»]*»|/hytte/\S+\s+(bestill|\d av \d:)|^(jeg har booket|slutt å følge med|slik bruker du hyttevarsel|bestill( nå| \pL{3} \d.*)?|\d av \d: .*):$`)
+	ownText         = regexp.MustCompile(`(?i)mailto:|«(stopp|oversikt)[^»]*»|/hytte/\S+\s+(bestill|\d av \d:)|^(jeg har booket|slutt å følge med( på .*)?|slik bruker du hyttevarsel|bestill( nå| \pL+ \d.*)?|\d av \d: .*):$`)
 	replyPrefix     = regexp.MustCompile(`(?i)^\s*(re|sv)\s*:`)
 	listPattern     = regexp.MustCompile(`(?i)(^|[^\pL])(oversikt|liste|status)([^\pL]|$)`)
 	flexPattern     = regexp.MustCompile(`(?i)mellom|fleksib|hvilken som helst|ledig natt|når som helst`)
@@ -81,7 +85,12 @@ var (
 	textDate        = regexp.MustCompile(`(?i)(^|[^\d])(\d{1,2})\.?\s*` + monthNames + `\.?(?:\s+(\d{4}))?`)
 	textRange       = regexp.MustCompile(`(?i)(^|[^\d])(\d{1,2})\.?\s*(?:-|–|—|til|og)\s*(\d{1,2})\.?\s*` + monthNames + `\.?(?:\s+(\d{4}))?`)
 	rangeSeparator  = regexp.MustCompile(`(?i)^\s*(?:-|–|—|til|og|to)\s*$`)
-	weekdayInMonth  = regexp.MustCompile(`(?i)((?:(?:mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|helg)(?:er|ene|en)?\s*(?:,|og)?\s*)+)\s+i\s+` + monthNames + `(?:\s+(\d{4}))?`)
+	monthAlt        = `(?:januar|februar|mars|april|mai|juni|juli|august|september|oktober|november|desember|jan|feb|mar|apr|jun|jul|aug|sept|sep|okt|nov|des)`
+	monthExpr       = `((?:` + monthAlt + `|sommer(?:en)?|høst(?:en)?|vinter(?:en)?|vår(?:en)?)(?:\s*(?:,|og|-|–|—|til)\s*` + monthAlt + `)*)`
+	monthToken      = regexp.MustCompile(`(?i)(` + monthAlt + `|sommer|høst|vinter|vår)|(-|–|—|til)|(,|og)`)
+	weekdayInMonth  = regexp.MustCompile(`(?i)((?:(?:mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|helg)(?:er|ene|en)?\s*(?:,|og)?\s*)+)\s+i\s+` + monthExpr + `(?:\s+(\d{4}))?`)
+	everyDayIn      = regexp.MustCompile(`(?i)(?:^|[^\pL])(?:hele|alle dager i|(?:en|ei|én) natt i|når som helst i)\s+` + monthExpr + `(?:\s+(\d{4}))?`)
+	routePattern    = regexp.MustCompile(`(?i)(^|[^\pL])(rute|ruta|hytte[- ]til[- ]hytte)([^\pL]|$)`)
 	weekdayWord     = regexp.MustCompile(`(?i)mandag|tirsdag|onsdag|torsdag|fredag|lørdag|søndag|helg`)
 	tagPattern      = regexp.MustCompile(`(?s)<[^>]*>`)
 	hrefPattern     = regexp.MustCompile(`(?i)<a\s[^>]*href="([^"]+)"[^>]*>`)
@@ -257,22 +266,18 @@ type parsedDates struct {
 func parseDates(text string, explicitNights int, now time.Time) (parsedDates, bool) {
 	flex := flexPattern.MatchString(text)
 
-	// «lørdager i august», «fredager og lørdager i juli», «helger i juni»
+	// «lørdager i august», «helger i juni–august», «helger i sommer»
 	if m := weekdayInMonth.FindStringSubmatch(text); m != nil {
 		var days []time.Weekday
 		for _, w := range weekdayWord.FindAllString(m[1], -1) {
 			days = append(days, weekdays[string([]rune(strings.ToLower(w))[:3])]...)
 		}
-		first, ok := inferYear(1, parseMonth(m[2]), m[3], now)
-		if !ok {
-			return parsedDates{}, false
-		}
-		var starts []time.Time
-		for d := first; d.Month() == first.Month(); d = d.AddDate(0, 0, 1) {
-			if slices.Contains(days, d.Weekday()) && !d.Before(today(now)) {
-				starts = append(starts, d)
-			}
-		}
+		starts := daysIn(parseMonths(m[2], m[3], now), days, now)
+		return parsedDates{starts: starts, flexible: true}, len(starts) > 0
+	}
+	// «hele juli», «en natt i juli»: hver dag i måneden
+	if m := everyDayIn.FindStringSubmatch(text); m != nil {
+		starts := daysIn(parseMonths(m[1], m[2], now), nil, now)
 		return parsedDates{starts: starts, flexible: true}, len(starts) > 0
 	}
 
@@ -319,6 +324,79 @@ func parseDates(text string, explicitNights int, now time.Time) (parsedDates, bo
 		starts = append(starts, d)
 	}
 	return parsedDates{starts: starts, flexible: len(starts) > 1}, true
+}
+
+type yearMonth struct {
+	year  int
+	month time.Month
+}
+
+var seasons = map[string][]time.Month{"som": {6, 7, 8}, "høs": {9, 10, 11}, "vin": {12, 1, 2}, "vår": {3, 4, 5}}
+
+// parseMonths leser «juni», «juni og juli», «juni–august» eller «sommer» til
+// måneder med år. Uten årstall gjelder neste gang perioden kommer.
+func parseMonths(expr, year string, now time.Time) []yearMonth {
+	var months []time.Month
+	ranged := false
+	for _, tok := range monthToken.FindAllStringSubmatch(expr, -1) {
+		switch {
+		case tok[2] != "":
+			ranged = true
+		case tok[1] != "":
+			low := strings.ToLower(tok[1])
+			if s, ok := seasons[string([]rune(low)[:3])]; ok && parseMonth(low) == 0 {
+				months = append(months, s...)
+				ranged = false
+				continue
+			}
+			m := parseMonth(low)
+			if m == 0 {
+				continue
+			}
+			if ranged && len(months) > 0 && months[len(months)-1] != m {
+				for x := months[len(months)-1]%12 + 1; x != m; x = x%12 + 1 {
+					months = append(months, x)
+				}
+			}
+			months = append(months, m)
+			ranged = false
+		}
+	}
+	if len(months) == 0 {
+		return nil
+	}
+	y := today(now).Year()
+	if year != "" {
+		y, _ = strconv.Atoi(year)
+	}
+	out := make([]yearMonth, len(months))
+	for i, m := range months {
+		if i > 0 && m < months[i-1] {
+			y++ // desember → januar
+		}
+		out[i] = yearMonth{y, m}
+	}
+	last := out[len(out)-1]
+	if end := time.Date(last.year, last.month+1, 0, 0, 0, 0, 0, oslo); year == "" && end.Before(today(now)) {
+		for i := range out {
+			out[i].year++
+		}
+	}
+	return out
+}
+
+// daysIn gir dagene i månedene som faller på ukedagene (alle når days er
+// tom), fra i dag og framover.
+func daysIn(months []yearMonth, days []time.Weekday, now time.Time) []time.Time {
+	var out []time.Time
+	for _, ym := range months {
+		for d := time.Date(ym.year, ym.month, 1, 0, 0, 0, 0, oslo); d.Month() == ym.month; d = d.AddDate(0, 0, 1) {
+			if (len(days) == 0 || slices.Contains(days, d.Weekday())) && !d.Before(today(now)) {
+				out = append(out, d)
+			}
+		}
+	}
+	return out
 }
 
 // ParseMessage tolker emne og tekst fra en e-post.
@@ -392,25 +470,43 @@ func parseAdd(plain string, links []cabinLink, now time.Time) (Request, error) {
 			guests = parseNumber(m[5])
 		}
 	}
-	if guests == 0 {
-		for _, l := range links {
-			guests = max(guests, l.guests)
-		}
+	linkGuests := 0
+	for _, l := range links {
+		linkGuests = max(linkGuests, l.guests)
 	}
-	w := Watch{Guests: max(guests, 1)}
+	// Flere lenker er flere hytter å følge med på, hver for seg. Bare når
+	// hun skriver «rute» er det en tur der alle må være ledige etter tur.
+	route := len(links) > 1 && routePattern.MatchString(plain)
+	req := Request{Kind: ReqAdd}
 
 	if pd, ok := parseDates(plain, nights, now); ok {
 		n := max(nights, pd.nights, 1)
-		offset := 0
-		for _, l := range links {
-			w.Legs = append(w.Legs, Leg{CabinID: l.id, Offset: offset, Nights: n})
-			offset += n
-		}
+		var starts []string
 		for _, s := range pd.starts {
-			w.Starts = append(w.Starts, s.Format(dateLayout))
+			starts = append(starts, s.Format(dateLayout))
 		}
-		w.Flexible = pd.flexible
-		return Request{Kind: ReqAdd, Watch: w}, nil
+		if route {
+			w := Watch{Guests: max(guests, linkGuests, 1), Starts: starts, Flexible: pd.flexible}
+			for i, l := range links {
+				w.Legs = append(w.Legs, Leg{CabinID: l.id, Offset: i * n, Nights: n})
+			}
+			req.Watches = []Watch{w}
+			return req, nil
+		}
+		seen := map[int]bool{}
+		for _, l := range links {
+			if seen[l.id] {
+				continue
+			}
+			seen[l.id] = true
+			req.Watches = append(req.Watches, Watch{
+				Guests:   max(cmp.Or(guests, l.guests, linkGuests), 1),
+				Legs:     []Leg{{CabinID: l.id, Nights: n}},
+				Starts:   slices.Clone(starts),
+				Flexible: pd.flexible,
+			})
+		}
+		return req, nil
 	}
 
 	// Ingen dato i teksten: bruk datoene i lenkene (DNT-siden legger dem i
@@ -424,13 +520,21 @@ func parseAdd(plain string, links []cabinLink, now time.Time) (Request, error) {
 			start = l.from
 		}
 	}
+	linkNights := func(l cabinLink) int { return cmp.Or(nights, int(l.to.Sub(l.from).Hours()/24+0.5)) }
+	if route {
+		w := Watch{Guests: max(guests, linkGuests, 1), Starts: []string{start.Format(dateLayout)}}
+		for _, l := range links {
+			w.Legs = append(w.Legs, Leg{CabinID: l.id, Offset: int(l.from.Sub(start).Hours()/24 + 0.5), Nights: linkNights(l)})
+		}
+		req.Watches = []Watch{w}
+		return req, nil
+	}
 	for _, l := range links {
-		w.Legs = append(w.Legs, Leg{
-			CabinID: l.id,
-			Offset:  int(l.from.Sub(start).Hours()/24 + 0.5),
-			Nights:  cmp.Or(nights, int(l.to.Sub(l.from).Hours()/24+0.5)),
+		req.Watches = append(req.Watches, Watch{
+			Guests: max(cmp.Or(guests, l.guests, linkGuests), 1),
+			Legs:   []Leg{{CabinID: l.id, Nights: linkNights(l)}},
+			Starts: []string{l.from.Format(dateLayout)},
 		})
 	}
-	w.Starts = []string{start.Format(dateLayout)}
-	return Request{Kind: ReqAdd, Watch: w}, nil
+	return req, nil
 }

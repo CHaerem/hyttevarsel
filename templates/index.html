@@ -50,7 +50,7 @@
   {{with .Notice}}<div class="msg ok">{{.}}</div>{{end}}
 
   <form class="card" method="post" action="/watches">
-    <label for="hytter">Lenke til hytta <small>(flere lenker = rute, én per linje)</small></label>
+    <label for="hytter">Lenke til hytta <small>(flere lenker følges hver for seg, én per linje)</small></label>
     <textarea id="hytter" name="hytter" required placeholder="https://hyttebestilling.dnt.no/hytte/…" autocomplete="off"></textarea>
     <div class="row">
       <div>
@@ -72,6 +72,7 @@
         <input id="personer" name="personer" type="number" min="1" max="20" value="1">
       </div>
     </div>
+    <label style="font-weight:400"><input type="checkbox" name="rute" value="1" style="width:auto"> Rute: hyttene etter hverandre, varsel når alle er ledige</label>
     <button type="submit">Følg med</button>
     <p class="meta">Fyll inn «Senest» for å få varsel om første ledige natt i en periode.</p>
   </form>

@@ -17,8 +17,8 @@ const dateLayout = "2006-01-02"
 // Grenser per overvåking, så én e-post ikke kan gi hundrevis av kall.
 const (
 	maxLegs     = 6
-	maxStarts   = 31
-	maxChecks   = 40
+	maxStarts   = 62 // helgene i et halvt år
+	maxChecks   = 62
 	maxNights   = 14
 	maxGuests   = 20
 	bookAheadMo = 13 // DNT åpner et år fram; litt slakk
