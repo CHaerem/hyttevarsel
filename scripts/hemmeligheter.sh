@@ -16,10 +16,13 @@ tty=/dev/tty
 read -rp "Varseladressen (Gmail): " SMTP_USER <"$tty"
 read -rsp "App-passordet (16 tegn, mellomrom gjør ikke noe): " SMTP_PASSWORD <"$tty"; echo
 read -rp "Kristines e-postadresse: " MAIL_TO <"$tty"
-read -rp "Tailnet-navnet (delen før .ts.net, f.eks. tail1234): " TAILNET <"$tty"
+# Bare for lenken til oversikten nederst i e-postene. Kristine er ikke på
+# tailnettet, så den kan stå tom.
+read -rp "Tailnet-navnet for lenken til oversikten (valgfri, Enter for å hoppe over): " TAILNET <"$tty"
 SMTP_PASSWORD=${SMTP_PASSWORD// /}
 export SMTP_USER SMTP_PASSWORD MAIL_TO
-export BASE_URL="https://hyttevarsel.$TAILNET.ts.net"
+export BASE_URL=""
+[ -n "$TAILNET" ] && BASE_URL="https://hyttevarsel.$TAILNET.ts.net"
 
 echo "Prøver innloggingen mot Gmail (IMAP)..."
 # -K leser brukernavn og passord fra en pipe, ikke fra argv.
@@ -57,7 +60,7 @@ sopssecret() { # <fil> <navn>; stringData som JSON på stdin
   grep -q 'ENC\[' "$1" || { echo "Krypteringen av $1 feilet, ingenting pushet."; exit 1; }
 }
 
-nix shell nixpkgs#jq -c jq -n '{SMTP_USER: env.SMTP_USER, SMTP_PASSWORD: env.SMTP_PASSWORD, MAIL_TO: env.MAIL_TO, BASE_URL: env.BASE_URL}' \
+nix shell nixpkgs#jq -c jq -n '{SMTP_USER: env.SMTP_USER, SMTP_PASSWORD: env.SMTP_PASSWORD, MAIL_TO: env.MAIL_TO} + (if env.BASE_URL != "" then {BASE_URL: env.BASE_URL} else {} end)' \
   | sopssecret kubernetes/apps/hyttevarsel/smtp.sops.yaml hyttevarsel-smtp
 unset SMTP_PASSWORD
 

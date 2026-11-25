@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/CHaerem/hyttevarsel/main/scripts/he
 ```
 
 Skriptet spør etter varseladressen, app-passordet, Kristines adresse og
-tailnet-navnet. Det prøver innloggingen mot Gmail, henter varselagentens
+(valgfritt) tailnet-navnet for lenken til oversikten. Det prøver innloggingen mot Gmail, henter varselagentens
 URL og token fra linux-4, krypterer begge hemmelighetene til eieren og
 klusteret (`.sops.yaml` i Homelab) og åpner en PR i Homelab. Merge den, så
 starter poden. Ingen verdi havner i klartekst på disk eller i argv.
