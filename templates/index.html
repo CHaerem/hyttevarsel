@@ -17,9 +17,11 @@
   p.lead { color:var(--muted); margin:0 0 1rem; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
   label { display:block; font-weight:600; margin:.6rem 0 .2rem; }
-  input { width:100%; font:inherit; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); }
+  label small { font-weight:400; color:var(--muted); }
+  input, textarea { width:100%; font:inherit; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); }
+  textarea { min-height:3.2em; }
   .row { display:flex; gap:10px; }
-  .row > div { flex:1; }
+  .row > div { flex:1; min-width:0; }
   button { font:inherit; font-weight:600; border:0; border-radius:8px; padding:11px 16px; background:var(--accent); color:#fff; margin-top:.9rem; width:100%; }
   button.link { background:none; color:var(--muted); width:auto; padding:0; margin:0; font-weight:400; text-decoration:underline; }
   .msg { padding:10px 14px; border-radius:8px; margin-bottom:12px; border:1px solid; }
@@ -32,29 +34,37 @@
   .badge.ledig { color:var(--ok); }
   .badge.full { color:var(--muted); }
   .badge.feil { color:var(--warn); }
+  .free a { color:var(--ok); font-weight:600; }
   a { color:inherit; }
   .expired { opacity:.6; }
   form.inline { display:inline; }
+  details { margin-top:1rem; color:var(--muted); }
 </style>
 </head>
 <body>
 <main>
   <h1>Hyttevarsel</h1>
-  <p class="lead">Følg med på fullbookede DNT-hytter. Du får e-post når det blir ledig plass. Det sjekkes omtrent hvert {{.Interval}}.</p>
+  <p class="lead">Følg med på fullbookede DNT-hytter og få e-post når noen avbestiller.{{with .Address}} Det enkleste er å dele hyttelenken fra DNT-siden på e-post til <strong>{{.}}</strong>.{{end}}</p>
 
   {{with .Error}}<div class="msg err">{{.}}</div>{{end}}
   {{with .Notice}}<div class="msg ok">{{.}}</div>{{end}}
 
   <form class="card" method="post" action="/watches">
-    <label for="hytte">Lenke til hytta</label>
-    <input id="hytte" name="hytte" required placeholder="https://hyttebestilling.dnt.no/hytte/…" inputmode="url" autocomplete="off">
+    <label for="hytter">Lenke til hytta <small>(flere lenker = rute, én per linje)</small></label>
+    <textarea id="hytter" name="hytter" required placeholder="https://hyttebestilling.dnt.no/hytte/…" autocomplete="off"></textarea>
     <div class="row">
       <div>
         <label for="dato">Ankomst</label>
         <input id="dato" name="dato" type="date" required min="{{.Today}}" max="{{.MaxDate}}">
       </div>
       <div>
-        <label for="netter">Netter</label>
+        <label for="til">Senest <small>(valgfri)</small></label>
+        <input id="til" name="til" type="date" min="{{.Today}}" max="{{.MaxDate}}">
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="netter">Netter <small>(per hytte)</small></label>
         <input id="netter" name="netter" type="number" min="1" max="14" value="1">
       </div>
       <div>
@@ -63,23 +73,26 @@
       </div>
     </div>
     <button type="submit">Følg med</button>
+    <p class="meta">Fyll inn «Senest» for å få varsel om første ledige natt i en periode.</p>
   </form>
 
   <h2>Følger med på</h2>
   {{range .Active}}
   <div class="card">
     <div class="watch-head">
-      <span class="name"><a href="{{bookingURL .}}">{{if .CabinName}}{{.CabinName}}{{else}}Hytte {{.CabinID}}{{end}}</a></span>
-      {{if .LastError}}<span class="badge feil">Feil ved sjekk</span>
-      {{else if eq .Status "ledig"}}<span class="badge ledig">Ledig nå ({{.Free}})</span>
-      {{else if eq .Status "full"}}<span class="badge full">Fullt</span>
-      {{else}}<span class="badge full">Venter</span>{{end}}
+      <span class="name">{{.Title}} <span class="meta">[#{{.ID}}]</span></span>
+      {{if .Free}}<span class="badge ledig">Ledig nå</span>
+      {{else if .Errors}}<span class="badge feil">Feil ved sjekk</span>
+      {{else if .LastChecked.IsZero}}<span class="badge full">Venter</span>
+      {{else}}<span class="badge full">Fullt</span>{{end}}
     </div>
-    <div class="meta">{{dato .FromDate}}, {{netter .Nights}}, {{personer .Guests}}</div>
-    <div class="meta">Sist sjekket {{klokke .LastChecked}}{{if not .LastNotified.IsZero}} · sist varslet {{klokke .LastNotified}}{{end}}
+    <div class="meta">{{describe .Watch}}</div>
+    {{if .Free}}{{$w := .Watch}}
+    <div class="free">Bestill: {{range $i, $s := .Free}}{{if $i}} · {{end}}{{range $w.Legs}}<a href="{{bookingURL . $s $w.Guests}}">{{if $w.IsRoute}}{{.Name}} {{end}}{{legDato . $s}}</a> {{end}}{{end}}</div>
+    {{end}}
+    <div class="meta">Sist sjekket {{klokke .LastChecked}}
       · <form class="inline" method="post" action="/watches/{{.ID}}/delete"><button class="link" type="submit">Fjern</button></form>
     </div>
-    {{with .LastError}}<div class="meta">{{.}}</div>{{end}}
   </div>
   {{else}}
   <p class="meta">Ingenting ennå. Legg til en hytte over.</p>
@@ -89,13 +102,18 @@
   <h2>Passert</h2>
   {{range .Expired}}
   <div class="card expired">
-    <span class="name">{{if .CabinName}}{{.CabinName}}{{else}}Hytte {{.CabinID}}{{end}}</span>
-    <div class="meta">{{dato .FromDate}} · fjernes automatisk etter to uker
+    <span class="name">{{.Title}}</span>
+    <div class="meta">{{describe .Watch}} · fjernes automatisk etter to uker
       · <form class="inline" method="post" action="/watches/{{.ID}}/delete"><button class="link" type="submit">Fjern nå</button></form>
     </div>
   </div>
   {{end}}
   {{end}}
+
+  <details>
+    <summary>Slik sjekkes det</summary>
+    <p>Hver hytte og dato sjekkes hvert 2. minutt de siste ti dagene før ankomst, når de fleste avbestiller (gratis frist 5 dager før på selvbetjente hytter, 8 på betjente), hvert 5. minutt inntil en måned før og hvert 15. minutt ellers. Varselet kommer når det blir plass til hele følget, og høyst én gang i halvtimen per dato.</p>
+  </details>
 </main>
 </body>
 </html>

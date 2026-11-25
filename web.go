@@ -1,15 +1,12 @@
 package main
 
 import (
-	"context"
 	"embed"
-	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -17,21 +14,29 @@ import (
 var templateFS embed.FS
 
 var templates = template.Must(template.New("").Funcs(template.FuncMap{
-	"dato":       norskDato,
-	"netter":     netter,
-	"personer":   personer,
-	"bookingURL": func(w Watch) string { return BookingURL(w.CabinID, w.FromDate(), w.ToDate(), w.Guests) },
+	"describe": Describe,
+	"kort":     func(s string) string { return kortDato(parseDate(s)) },
+	"legDato": func(l Leg, start string) string {
+		from, _ := l.Stay(start)
+		return kortDato(from)
+	},
 	"klokke": func(t time.Time) string {
 		if t.IsZero() {
 			return "ikke ennå"
 		}
 		return t.In(oslo).Format("02.01. kl. 15:04")
 	},
+	"bookingURL": func(l Leg, start string, guests int) string {
+		from, to := l.Stay(start)
+		return BookingURL(l.CabinID, from, to, guests)
+	},
 }).ParseFS(templateFS, "templates/*.html"))
 
 type Server struct {
-	Store  *Store
-	Poller *Poller
+	Store   *Store
+	Poller  *Poller
+	Mailer  *Mailer // valgfri: bekreftelse på e-post
+	Address string  // varseladressen, vises på siden
 }
 
 func (s *Server) Routes() http.Handler {
@@ -43,27 +48,43 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
+type watchView struct {
+	Watch
+	Free        []string
+	LastChecked time.Time
+	Errors      int
+}
+
 type indexData struct {
-	Active, Expired []Watch
+	Active, Expired []watchView
 	Error, Notice   string
 	Today, MaxDate  string
-	Interval        time.Duration
+	Address         string
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(oslo)
 	d := indexData{
-		Error:    r.URL.Query().Get("feil"),
-		Notice:   r.URL.Query().Get("ok"),
-		Today:    now.Format(dateLayout),
-		MaxDate:  now.AddDate(1, 1, 0).Format(dateLayout),
-		Interval: s.Poller.Interval,
+		Error:   r.URL.Query().Get("feil"),
+		Notice:  r.URL.Query().Get("ok"),
+		Today:   now.Format(dateLayout),
+		MaxDate: now.AddDate(0, bookAheadMo, 0).Format(dateLayout),
+		Address: s.Address,
 	}
 	for _, wa := range s.Store.List() {
+		v := watchView{Watch: wa, Free: wa.FreeStarts(now)}
+		for _, c := range wa.Checks {
+			if c.LastChecked.After(v.LastChecked) {
+				v.LastChecked = c.LastChecked
+			}
+			if c.LastError != "" {
+				v.Errors++
+			}
+		}
 		if wa.Expired(now) {
-			d.Expired = append(d.Expired, wa)
+			d.Expired = append(d.Expired, v)
 		} else {
-			d.Active = append(d.Active, wa)
+			d.Active = append(d.Active, v)
 		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -77,9 +98,15 @@ func redirect(w http.ResponseWriter, r *http.Request, key, msg string) {
 }
 
 func (s *Server) add(w http.ResponseWriter, r *http.Request) {
-	cabinID, ok := ParseCabinID(r.FormValue("hytte"))
-	if !ok {
-		redirect(w, r, "feil", "Fant ikke hytta i lenken. Lim inn lenken fra hyttebestilling.dnt.no (den med /hytte/ og et tall).")
+	links := parseLinks(r.FormValue("hytter"))
+	if len(links) == 0 {
+		// Bare tallet godtas også.
+		if id, ok := ParseCabinID(r.FormValue("hytter")); ok {
+			links = []cabinLink{{id: id}}
+		}
+	}
+	if len(links) == 0 {
+		redirect(w, r, "feil", "Fant ingen hytte. Lim inn lenken fra hyttebestilling.dnt.no (den med /hytte/ og et tall).")
 		return
 	}
 	from, err := time.ParseInLocation(dateLayout, r.FormValue("dato"), oslo)
@@ -87,43 +114,33 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 		redirect(w, r, "feil", "Velg en ankomstdato.")
 		return
 	}
-	nights := atoiDefault(r.FormValue("netter"), 1)
-	guests := atoiDefault(r.FormValue("personer"), 1)
-	if nights < 1 || nights > 14 || guests < 1 || guests > 20 {
-		redirect(w, r, "feil", "Antall netter må være 1–14 og antall personer 1–20.")
-		return
-	}
-	wa := Watch{CabinID: cabinID, From: from.Format(dateLayout), Nights: nights, Guests: guests, CreatedAt: time.Now()}
-	if wa.Expired(time.Now()) {
-		redirect(w, r, "feil", "Datoen har vært.")
-		return
-	}
-
-	// Sjekk med en gang: da får vi navnet på hytta, og en hytte uten
-	// nettbooking avvises her i stedet for å feile stille hver runde.
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-	if _, err := s.Poller.DNT.Check(ctx, wa.CabinID, wa.FromDate(), wa.ToDate()); err != nil {
-		msg := "DNT svarte ikke som ventet for denne hytta. Har den nettbooking?"
-		if strings.Contains(err.Error(), "web products") {
-			msg = "Denne hytta kan ikke bestilles på nett, så den kan ikke overvåkes."
+	until := from
+	if v := r.FormValue("til"); v != "" {
+		if until, err = time.ParseInLocation(dateLayout, v, oslo); err != nil || until.Before(from) {
+			redirect(w, r, "feil", "Siste ankomstdato må være etter den første.")
+			return
 		}
-		redirect(w, r, "feil", msg)
+	}
+	nights := atoiDefault(r.FormValue("netter"), 1)
+	wa := Watch{Guests: atoiDefault(r.FormValue("personer"), 1), Flexible: until.After(from)}
+	for i, l := range links {
+		wa.Legs = append(wa.Legs, Leg{CabinID: l.id, Offset: i * nights, Nights: nights})
+	}
+	for d := from; !d.After(until); d = d.AddDate(0, 0, 1) {
+		wa.Starts = append(wa.Starts, d.Format(dateLayout))
+	}
+	wa, err = AddWatch(r.Context(), s.Store, s.Poller, wa)
+	if err != nil {
+		redirect(w, r, "feil", "Fikk ikke lagt inn: "+err.Error()+".")
 		return
 	}
-	name, err := s.Poller.DNT.CabinName(ctx, wa.CabinID)
-	if err != nil {
-		slog.Warn("fant ikke hyttenavnet", "cabin", wa.CabinID, "err", err)
-		name = fmt.Sprintf("Hytte %d", wa.CabinID)
+	if s.Mailer != nil {
+		if err := s.Mailer.Confirm(r.Context(), wa, ""); err != nil {
+			slog.Error("bekreftelse feilet", "err", err)
+		}
 	}
-	wa.CabinName = name
-	wa, err = s.Store.Add(wa)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	s.Poller.CheckOne(ctx, wa)
-	redirect(w, r, "ok", "Følger nå med på "+wa.CabinName+", "+norskDato(wa.FromDate())+".")
+	s.Poller.Evaluate(r.Context(), wa.ID)
+	redirect(w, r, "ok", "Følger nå med på "+wa.Title()+".")
 }
 
 func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +149,7 @@ func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := s.Store.Delete(id); err != nil {
+	if _, err := s.Store.Delete(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

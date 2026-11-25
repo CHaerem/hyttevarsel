@@ -124,7 +124,9 @@ func (d *DNT) CabinName(ctx context.Context, cabinID int) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("DNT svarte %s", resp.Status)
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 64<<10)) // <title> står tidlig i <head>
+	// <title> står vanligvis tidlig i <head>, men Next.js kan strømme den
+	// senere; siden er ~400 kB.
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if err != nil {
 		return "", err
 	}
