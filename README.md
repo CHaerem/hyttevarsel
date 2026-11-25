@@ -7,6 +7,9 @@ forsvinner fort. DNT har ikke noe varsel selv.
 
 ## Slik brukes den
 
+Bruksanvisningen til Kristine: [docs/bruksanvisning.md](docs/bruksanvisning.md).
+Oppsettet før første kjøring: [docs/oppsett.md](docs/oppsett.md).
+
 **Legg til en hytte:** åpne hytta på hyttebestilling.dnt.no, velg datoer og
 antall personer, trykk Del og send lenken på e-post til varseladressen.
 Datoene ligger i lenken. Du får en bekreftelse som sier hvordan e-posten ble
