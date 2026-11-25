@@ -43,6 +43,7 @@
   h1 em { font-style: normal; color: var(--rust); }
   .lead { font-size: 19px; color: var(--muted); margin: 0; max-width: 32em; }
   .landscape { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: 170px; display: block; }
+  .deco { position: absolute; right: 8%; bottom: 62px; width: 120px; height: 90px; }
 
   /* Adressekortet */
   .addr { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 18px;
@@ -111,6 +112,35 @@
   .ex code { display: inline-block; background: var(--code); border-radius: 8px; padding: 3px 9px; font: 600 15px var(--sans); color: var(--text); }
   .ex p { margin: 8px 0 0; color: var(--muted); font-size: 15px; }
   .ex.wide { grid-column: 1 / -1; }
+  .bm { display: grid; gap: 8px; margin: 12px 0 4px; }
+  .bm .btn { cursor: grab; }
+
+  /* Bred skjerm: mer luft, steg og eksempler side om side */
+  @media (min-width: 960px) {
+    body { font-size: 18px; }
+    .wrap { max-width: 1040px; padding: 0 32px; }
+    .hero .wrap { padding-top: 56px; padding-bottom: 210px; }
+    h1 { font-size: 64px; max-width: 12em; }
+    .lead { font-size: 21px; }
+    .landscape { height: 240px; }
+    .deco { right: 14%; bottom: 96px; width: 150px; height: 112px; }
+    .addr { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 8px 24px; padding: 22px 26px; margin-top: -60px; }
+    .addr small { grid-column: 1; }
+    .addr .email { grid-column: 1; margin: 0; font-size: 22px; }
+    .addr .btns { grid-column: 2; grid-row: 1 / span 2; grid-template-columns: auto auto; }
+    .addr .btn { padding: 13px 20px; }
+    section { padding-top: 72px; }
+    h2 { font-size: 36px; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .steps::before { left: 26px; right: 26px; top: 25px; bottom: auto; border-left: 0; border-top: 2px dashed var(--line); }
+    .steps li { display: flex; flex-direction: column; gap: 14px; margin: 0; }
+    .steps .txt { flex: 1; }
+    .alert-demo { display: grid; grid-template-columns: 360px 1fr; gap: 22px; align-items: center; }
+    .alert-demo .email-card { margin-top: 0; }
+    .grid { grid-template-columns: repeat(3, 1fr); }
+    .bm { grid-template-columns: repeat(3, auto); justify-content: start; }
+    details .in { padding-right: 26px; }
+  }
 
   .replies { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
   .replies div { display: grid; grid-template-columns: 110px 1fr; gap: 12px; padding: 14px 16px; border-top: 1px solid var(--line); align-items: baseline; }
@@ -132,12 +162,13 @@
     <p class="lead">Send hyttelenken på e-post. Når noen avbestiller, får du en e-post med en knapp rett til bestillingen.</p>
   </div>
   <svg class="landscape" viewBox="0 0 400 170" preserveAspectRatio="none" aria-hidden="true">
-    <circle cx="320" cy="62" r="22" fill="#f2b872" opacity=".85"/>
     <path d="M0 110 60 58l40 30 52-58 58 62 40-34 60 52 50-36 40 30V170H0z" fill="#9cbfa8" opacity=".55"/>
-    <path d="M150 30l-14 16h28z M262 52l-10 10h20z" fill="#fff" opacity=".7"/>
     <path d="M0 130 70 86l50 32 70-48 60 46 50-30 100 56V170H0z" fill="#5e9277"/>
     <path d="M0 150c60-18 120-22 190-12s140 4 210-14V170H0z" fill="#2f6a4f"/>
-    <g transform="translate(286 88) scale(1.15)">
+  </svg>
+  <svg class="deco" viewBox="0 0 120 90" aria-hidden="true">
+    <circle cx="78" cy="22" r="20" fill="#f2b872" opacity=".85"/>
+    <g transform="translate(22 52) scale(1.3)">
       <path d="M0 18V8l11-9 11 9v10z" fill="#c2552c"/>
       <path d="M-2 9 11-2l13 11" fill="none" stroke="#7c2f17" stroke-width="2.2" stroke-linejoin="round"/>
       <rect x="8" y="10" width="6" height="8" fill="#f6e2c4"/>
@@ -163,7 +194,7 @@
       <li><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19 12 5l9 14z"/><path d="M9.5 19v-4h5v4"/></svg></span>
         <div class="txt"><h3>Finn hytta</h3><p>Åpne hytta på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a>. Velg datoer og antall personer, som når du bestiller.</p></div></li>
       <li><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></span>
-        <div class="txt"><h3>Del lenken</h3><p>Trykk <b>Del</b> og send lenken til Hyttevarsel. Du trenger ikke skrive noe, for datoene ligger i lenken.</p></div></li>
+        <div class="txt"><h3>Del lenken</h3><p>Trykk <b>Del</b> på mobilen, eller kopier adressen i nettleseren på PC-en, og send lenken til Hyttevarsel. Du trenger ikke skrive noe, for datoene ligger i lenken.</p></div></li>
       <li><span class="dot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 20a2 2 0 0 0 4 0"/></svg></span>
         <div class="txt"><h3>Vent på varselet</h3><p>Om et minutt kommer en bekreftelse. Når noen avbestiller, kommer varselet.</p></div></li>
     </ol>
@@ -173,6 +204,7 @@
     <p class="eyebrow">Når det blir ledig</p>
     <h2>Ett trykk til bestilling</h2>
     <p class="sub">Plassen kan bli tatt fort, så vær rask.</p>
+    <div class="alert-demo">
     <div class="phone" aria-label="Eksempel på varsel">
       <div class="time">07:42</div>
       <div class="date">lørdag 5. juli</div>
@@ -188,13 +220,27 @@
       <span class="book">Bestill nå</span>
       <div class="links">Jeg har booket · Slutt å følge med</div>
     </div>
+    </div>
     <p class="hint">«Bestill nå» åpner DNT-siden med datoene fylt inn. «Jeg har booket» stopper varslene for den hytta.</p>
   </section>
 
   <section>
     <p class="eyebrow">Enda enklere</p>
-    <h2>«Følg med» i delingsmenyen</h2>
-    <p class="sub">Gjør det én gang, så holder det med ett trykk.</p>
+    <h2>«Følg med» med ett trykk</h2>
+    <p class="sub">Gjør det én gang på mobilen eller PC-en.</p>
+    <details>
+      <summary><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>PC og Mac<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary>
+      <div class="in">
+        <p style="margin-top:0">Dra knappen for e-posten du bruker opp i <b>bokmerkelinja</b> (vis den med Ctrl+Shift+B, eller ⌘+Shift+B på Mac):</p>
+        <div class="bm">
+          <a class="btn primary" href="javascript:void(window.open('https://outlook.live.com/mail/0/deeplink/compose?to=hyttevarsel.chaerem@gmail.com&amp;subject='+encodeURIComponent('Følg med')+'&amp;body='+encodeURIComponent(location.href)))" onclick="return false" draggable="true">Følg med (Hotmail/Outlook)</a>
+          <a class="btn soft" href="javascript:void(window.open('https://mail.google.com/mail/?view=cm&amp;to=hyttevarsel.chaerem@gmail.com&amp;su='+encodeURIComponent('Følg med')+'&amp;body='+encodeURIComponent(location.href)))" onclick="return false" draggable="true">Følg med (Gmail)</a>
+          <a class="btn soft" href="javascript:void(location.href='mailto:hyttevarsel.chaerem@gmail.com?subject='+encodeURIComponent('Følg med')+'&amp;body='+encodeURIComponent(location.href))" onclick="return false" draggable="true">Følg med (e-postprogram)</a>
+        </div>
+        <p>På hyttesiden hos DNT klikker du bokmerket. Da åpnes en ferdig e-post til Hyttevarsel med lenken i, og du trykker bare <b>Send</b>.</p>
+        <p>Uten bokmerke: kopier adressen fra adresselinja og lim den inn i en e-post til Hyttevarsel.</p>
+      </div>
+    </details>
     <details>
       <summary><span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18h2"/></svg></span>iPhone<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></summary>
       <div class="in">
