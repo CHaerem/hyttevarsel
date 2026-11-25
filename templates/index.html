@@ -2,119 +2,181 @@
 <html lang="nb">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="apple-mobile-web-app-title" content="Hyttevarsel">
 <title>Hyttevarsel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232d5a45'/%3E%3Cpath d='M8 23v-9l8-6 8 6v9z' fill='none' stroke='%23fff' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
-  :root { --bg:#f6f5f1; --card:#fff; --text:#1d2321; --muted:#5f6b66; --line:#dcdcd4; --accent:#c8102e; --ok:#1f7a3f; --warn:#9a5b00; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#141716; --card:#1e2220; --text:#e9ece9; --muted:#a2aca7; --line:#343a37; --accent:#ff5a6e; --ok:#5fcf86; --warn:#f0b257; }
+  /* Samme rolige drakt som oppskriftssiden og e-postene: varm, lys
+     bakgrunn, mørk tekst, furugrønt for det hun kan trykke på. */
+  :root {
+    --paper: #f3f0eb; --sheet: #fffefc; --ink: #26221f; --ink-2: #6a625b; --rule: #e3ddd4;
+    --go: #2d5a45; --go-soft: #e7eeea; --on-go: #ffffff; --warn: #9a3b2f;
+    color-scheme: light;
   }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width:640px; margin:0 auto; padding:16px; }
-  h1 { font-size:1.5rem; margin:.5rem 0 .25rem; }
-  h2 { font-size:1.1rem; margin:1.75rem 0 .5rem; }
-  p.lead { color:var(--muted); margin:0 0 1rem; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
-  label { display:block; font-weight:600; margin:.6rem 0 .2rem; }
-  label small { font-weight:400; color:var(--muted); }
-  input, textarea { width:100%; font:inherit; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); }
-  textarea { min-height:3.2em; }
-  .row { display:flex; gap:10px; }
-  .row > div { flex:1; min-width:0; }
-  button { font:inherit; font-weight:600; border:0; border-radius:8px; padding:11px 16px; background:var(--accent); color:#fff; margin-top:.9rem; width:100%; }
-  button.link { background:none; color:var(--muted); width:auto; padding:0; margin:0; font-weight:400; text-decoration:underline; }
-  .msg { padding:10px 14px; border-radius:8px; margin-bottom:12px; border:1px solid; }
-  .msg.err { color:var(--accent); border-color:var(--accent); }
-  .msg.ok { color:var(--ok); border-color:var(--ok); }
-  .watch-head { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
-  .name { font-weight:600; }
-  .meta { color:var(--muted); font-size:.9rem; }
-  .badge { font-size:.85rem; font-weight:600; white-space:nowrap; }
-  .badge.ledig { color:var(--ok); }
-  .badge.full { color:var(--muted); }
-  .badge.feil { color:var(--warn); }
-  .free a { color:var(--ok); font-weight:600; }
-  a { color:inherit; }
-  .expired { opacity:.6; }
-  form.inline { display:inline; }
-  details { margin-top:1rem; color:var(--muted); }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #1a1816; --sheet: #23201d; --ink: #eee8e1; --ink-2: #b3a99f; --rule: #37322d;
+      --go: #8fc7a6; --go-soft: #213029; --on-go: #12201a; --warn: #e0897b;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 620px; margin: 0 auto; padding: 22px max(18px, env(safe-area-inset-right, 0px)) 48px max(18px, env(safe-area-inset-left, 0px)); }
+  a { color: var(--go); text-underline-offset: 3px; }
+  :focus-visible { outline: 3px solid var(--go); outline-offset: 2px; border-radius: 6px; }
+
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--ink); margin-bottom: 22px; }
+  .brand svg { width: 24px; height: 24px; color: var(--go); }
+  h1, h2 { margin: 0; line-height: 1.2; letter-spacing: -.01em; }
+  h1 { font-size: 28px; font-weight: 800; }
+  section { margin-top: 34px; }
+  section:first-of-type { margin-top: 0; }
+  .h { font-size: 22px; font-weight: 800; margin-bottom: 14px; }
+
+  .msg { margin: 0 0 18px; padding: 12px 14px; border-radius: 12px; border-left: 4px solid var(--go); background: var(--go-soft); }
+  .msg.err { border-color: var(--warn); background: var(--sheet); }
+
+  /* Lista */
+  .watches { list-style: none; margin: 14px 0 0; padding: 0; border-top: 1px solid var(--rule); }
+  .watch { padding: 16px 0; border-bottom: 1px solid var(--rule); }
+  .watch .top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .watch h2 { font-size: 19px; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .badge { flex: none; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+  .badge.ledig { color: var(--on-go); background: var(--go); border-radius: 999px; padding: 2px 10px; }
+  .badge.feil { color: var(--warn); }
+  .when { margin: 4px 0 0; color: var(--ink-2); }
+  .free { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; align-items: center; }
+  .book { display: inline-block; background: var(--go); color: var(--on-go); font-weight: 700; text-decoration: none; padding: 9px 14px; border-radius: 10px; }
+  .free span { color: var(--ink-2); font-size: 15px; }
+  .foot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-top: 10px; font-size: 14px; color: var(--ink-2); }
+  .foot form { margin: 0; }
+  .linkbtn { font: inherit; color: var(--ink-2); background: none; border: 0; padding: 4px 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .empty { margin: 12px 0 0; color: var(--ink-2); }
+  .passed { opacity: .6; }
+
+  /* Skjemaet */
+  .add { display: grid; gap: 14px; }
+  label, legend { display: block; font-weight: 600; font-size: 15px; margin-bottom: 6px; padding: 0; }
+  label small { font-weight: 400; color: var(--ink-2); }
+  input[type="text"], input[type="date"], input[type="number"] {
+    width: 100%; min-width: 0; font: inherit; color: var(--ink); background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; padding: 12px 13px; min-height: 50px; -webkit-appearance: none; appearance: none; }
+  input:focus { outline: none; border-color: var(--go); box-shadow: 0 0 0 3px var(--go-soft); }
+  .two { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px; }
+  details { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  summary { cursor: pointer; padding: 13px 0; font-weight: 600; color: var(--go); list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "+ "; }
+  details[open] summary::before { content: "– "; }
+  .more { display: grid; gap: 14px; padding: 2px 0 16px; }
+  fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .radio { display: flex; align-items: center; gap: 10px; font-weight: 400; font-size: 17px; margin: 0; padding: 7px 0; }
+  .radio input { width: 20px; height: 20px; margin: 0; accent-color: var(--go); }
+  .submit { font: inherit; font-weight: 700; font-size: 18px; color: var(--on-go); background: var(--go); border: 0; border-radius: 12px; padding: 14px 18px; min-height: 54px; cursor: pointer; }
+  .hint { margin: 0; color: var(--ink-2); font-size: 15px; }
+  footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--ink-2); font-size: 14px; }
+  footer p { margin: 0 0 6px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Hyttevarsel</h1>
-  <p class="lead">Følg med på fullbookede DNT-hytter og få e-post når noen avbestiller.{{with .Address}} Det enkleste er å dele hyttelenken fra DNT-siden på e-post til <strong>{{.}}</strong>.{{end}}</p>
+  <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20v-8l8-6 8 6v8z"/><path d="M10 20v-5h4v5"/></svg>Hyttevarsel</div>
 
-  {{with .Error}}<div class="msg err">{{.}}</div>{{end}}
-  {{with .Notice}}<div class="msg ok">{{.}}</div>{{end}}
+  {{with .Error}}<p class="msg err" role="alert">{{.}}</p>{{end}}
+  {{with .Notice}}<p class="msg" role="status">{{.}}</p>{{end}}
 
-  <form class="card" method="post" action="/watches">
-    <label for="hytter">Lenke til hytta <small>(flere lenker følges hver for seg, én per linje)</small></label>
-    <textarea id="hytter" name="hytter" required placeholder="https://hyttebestilling.dnt.no/hytte/…" autocomplete="off"></textarea>
-    <div class="row">
-      <div>
-        <label for="dato">Ankomst</label>
-        <input id="dato" name="dato" type="date" required min="{{.Today}}" max="{{.MaxDate}}">
-      </div>
-      <div>
-        <label for="til">Senest <small>(valgfri)</small></label>
-        <input id="til" name="til" type="date" min="{{.Today}}" max="{{.MaxDate}}">
-      </div>
-    </div>
-    <div class="row">
-      <div>
-        <label for="netter">Netter <small>(per hytte)</small></label>
-        <input id="netter" name="netter" type="number" min="1" max="14" value="1">
-      </div>
-      <div>
-        <label for="personer">Personer</label>
-        <input id="personer" name="personer" type="number" min="1" max="20" value="1">
-      </div>
-    </div>
-    <label style="font-weight:400"><input type="checkbox" name="rute" value="1" style="width:auto"> Rute: hyttene etter hverandre, varsel når alle er ledige</label>
-    <button type="submit">Følg med</button>
-    <p class="meta">Fyll inn «Senest» for å få varsel om første ledige natt i en periode.</p>
-  </form>
-
-  <h2>Følger med på</h2>
-  {{range .Active}}
-  <div class="card">
-    <div class="watch-head">
-      <span class="name">{{.Title}} <span class="meta">[#{{.ID}}]</span></span>
-      {{if .Free}}<span class="badge ledig">Ledig nå</span>
-      {{else if .Errors}}<span class="badge feil">Feil ved sjekk</span>
-      {{else if .LastChecked.IsZero}}<span class="badge full">Venter</span>
-      {{else}}<span class="badge full">Fullt</span>{{end}}
-    </div>
-    <div class="meta">{{describe .Watch}}</div>
-    {{if .Free}}{{$w := .Watch}}
-    <div class="free">Bestill: {{range $i, $s := .Free}}{{if $i}} · {{end}}{{range $w.Legs}}<a href="{{bookingURL . $s $w.Guests}}">{{if $w.IsRoute}}{{.Name}} {{end}}{{legDato . $s}}</a> {{end}}{{end}}</div>
+  <section>
+    <h1>Mine varsler</h1>
+    {{if .Active}}
+    <ul class="watches">
+      {{range .Active}}
+      <li class="watch">
+        <div class="top">
+          <h2>{{.Title}}</h2>
+          {{if eq .Status "ledig"}}<span class="badge ledig">Ledig nå</span>
+          {{else if eq .Status "feil"}}<span class="badge feil">Får ikke sjekket</span>
+          {{else if eq .Status "sjekkes"}}<span class="badge">Sjekkes nå</span>
+          {{else}}<span class="badge">Fullt</span>{{end}}
+        </div>
+        <p class="when">{{.When}}</p>
+        {{if .Free}}
+        <p class="free">{{range .Free}}<a class="book" href="{{.URL}}">Bestill {{.Label}}</a>{{end}}{{if .MoreFree}}<span>og {{.MoreFree}} datoer til</span>{{end}}</p>
+        {{end}}
+        <div class="foot">
+          <span>{{if .LastChecked}}Sist sjekket {{.LastChecked}}{{else}}Ikke sjekket ennå{{end}}</span>
+          <form method="post" action="/watches/{{.ID}}/delete"><button class="linkbtn" type="submit">Fjern</button></form>
+        </div>
+      </li>
+      {{end}}
+    </ul>
+    {{else}}
+    <p class="empty">Du følger ikke med på noen hytter ennå. Legg til den første under.</p>
     {{end}}
-    <div class="meta">Sist sjekket {{klokke .LastChecked}}
-      · <form class="inline" method="post" action="/watches/{{.ID}}/delete"><button class="link" type="submit">Fjern</button></form>
-    </div>
-  </div>
-  {{else}}
-  <p class="meta">Ingenting ennå. Legg til en hytte over.</p>
+  </section>
+
+  <section id="ny">
+    <h2 class="h">Følg med på en hytte</h2>
+    <form class="add" method="post" action="/watches">
+      <div>
+        <label for="hytte">Hytte</label>
+        <input id="hytte" name="hytte" type="text" list="hytter" required autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Navn på hytta, eller lenke fra DNT" value="{{.Form.Cabin}}">
+        <datalist id="hytter">{{range .Cabins}}<option value="{{.Label}}">{{end}}</datalist>
+      </div>
+      <div class="two">
+        <div>
+          <label for="dato">Ankomst</label>
+          <input id="dato" name="dato" type="date" required min="{{.Today}}" max="{{.MaxDate}}" value="{{.Form.Date}}">
+        </div>
+        <div>
+          <label for="personer">Personer</label>
+          <input id="personer" name="personer" type="number" inputmode="numeric" min="1" max="20" value="{{.Form.Guests}}">
+        </div>
+      </div>
+      <details{{if .Form.More}} open{{end}}>
+        <summary>Flere datoer eller netter</summary>
+        <div class="more">
+          <div>
+            <label for="til">Til og med <small>(siste mulige ankomst)</small></label>
+            <input id="til" name="til" type="date" min="{{.Today}}" max="{{.MaxDate}}" value="{{.Form.Until}}">
+          </div>
+          <fieldset>
+            <legend>Hvilke dager</legend>
+            <label class="radio"><input type="radio" name="dager" value="alle"{{if not .Form.Weekends}} checked{{end}}> Alle dager</label>
+            <label class="radio"><input type="radio" name="dager" value="helg"{{if .Form.Weekends}} checked{{end}}> Bare helger (fredag og lørdag)</label>
+          </fieldset>
+          <div>
+            <label for="netter">Netter</label>
+            <input id="netter" name="netter" type="number" inputmode="numeric" min="1" max="14" value="{{.Form.Nights}}">
+          </div>
+        </div>
+      </details>
+      <button class="submit" type="submit">Følg med</button>
+      <p class="hint">Du får e-post når det blir plass til alle. Skal du følge flere hytter, legger du dem til én om gangen. Datoene blir stående.</p>
+    </form>
+  </section>
+
+  {{if .Passed}}
+  <section>
+    <h2 class="h">Passert</h2>
+    <ul class="watches passed">
+      {{range .Passed}}
+      <li class="watch">
+        <div class="top"><h2>{{.Title}}</h2></div>
+        <p class="when">{{.When}}</p>
+        <div class="foot"><span>Fjernes av seg selv etter to uker</span>
+          <form method="post" action="/watches/{{.ID}}/delete"><button class="linkbtn" type="submit">Fjern nå</button></form></div>
+      </li>
+      {{end}}
+    </ul>
+  </section>
   {{end}}
 
-  {{if .Expired}}
-  <h2>Passert</h2>
-  {{range .Expired}}
-  <div class="card expired">
-    <span class="name">{{.Title}}</span>
-    <div class="meta">{{describe .Watch}} · fjernes automatisk etter to uker
-      · <form class="inline" method="post" action="/watches/{{.ID}}/delete"><button class="link" type="submit">Fjern nå</button></form>
-    </div>
-  </div>
-  {{end}}
-  {{end}}
-
-  <details>
-    <summary>Slik sjekkes det</summary>
-    <p>Hver hytte og dato sjekkes hvert 2. minutt de siste ti dagene før ankomst, når de fleste avbestiller (gratis frist 5 dager før på selvbetjente hytter, 8 på betjente), hvert 5. minutt inntil en måned før og hvert 15. minutt ellers. Varselet kommer når det blir plass til hele følget, og høyst én gang i halvtimen per dato.</p>
-  </details>
+  <footer>
+    <p>Hyttevarsel sjekker ledigheten hos DNT hvert 2. minutt de siste ti dagene før ankomst, og sjeldnere lenger fram.</p>
+    {{with .Address}}<p>Du kan også sende hyttelenker på e-post til {{.}}.</p>{{end}}
+  </footer>
 </main>
 </body>
 </html>

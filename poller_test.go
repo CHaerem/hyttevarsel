@@ -246,8 +246,8 @@ func TestWatchdogRaisesOnce(t *testing.T) {
 
 func TestWebAddAndList(t *testing.T) {
 	_, store, p, sent, m := setup(t)
-	h := (&Server{Store: store, Poller: p, Mailer: m, Address: m.Address}).Routes()
-	form := url.Values{"hytter": {"https://hyttebestilling.dnt.no/hytte/5"}, "dato": {future(30)}, "til": {future(32)}, "netter": {"1"}, "personer": {"2"}}
+	h := (&Server{Store: store, Poller: p, Address: m.Address}).Routes()
+	form := url.Values{"hytte": {"https://hyttebestilling.dnt.no/hytte/5"}, "dato": {future(30)}, "til": {future(32)}, "netter": {"1"}, "personer": {"2"}}
 	req := httptest.NewRequest("POST", "/watches", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -259,8 +259,8 @@ func TestWebAddAndList(t *testing.T) {
 	if len(ws) != 1 || len(ws[0].Starts) != 3 || !ws[0].Flexible {
 		t.Fatalf("overvåkinger: %+v", ws)
 	}
-	if got := sent.subjects(); len(got) != 1 || !strings.HasPrefix(got[0], "Følger med: Hytte nr 5") {
-		t.Fatalf("vil ha bekreftelse, fikk %v", got)
+	if len(sent.msgs) != 0 {
+		t.Fatalf("siden viser resultatet, så ingen e-post: %v", sent.subjects())
 	}
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest("GET", "/", nil))

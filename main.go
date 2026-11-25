@@ -61,7 +61,9 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	poller := &Poller{Store: store, DNT: NewDNT(), Notifier: mailer, Spacing: 3 * time.Second, Cadence: cadence}
+	dnt := NewDNT()
+	cabins := OpenDirectory(cmp.Or(os.Getenv("DATA_DIR"), "data"), dnt)
+	poller := &Poller{Store: store, DNT: dnt, Notifier: mailer, Spacing: 3 * time.Second, Cadence: cadence, Names: cabins}
 	if dir := os.Getenv("VARSEL_AGENT_DIR"); dir != "" {
 		poller.Alarm = &VarselAgent{URLFile: dir + "/url", TokenFile: dir + "/token", Client: &http.Client{Timeout: 30 * time.Second}}
 	}
@@ -69,6 +71,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go poller.Run(ctx)
+	go cabins.Run(ctx)
 	go RunSummary(ctx, store, mailer)
 	if os.Getenv("SMTP_HOST") != "" && len(mailer.To) > 0 && os.Getenv("WELCOME") != "off" {
 		go RunWelcome(ctx, store, mailer)
@@ -88,7 +91,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              cmp.Or(os.Getenv("LISTEN"), ":8080"),
-		Handler:           (&Server{Store: store, Poller: poller, Mailer: mailer, Address: address}).Routes(),
+		Handler:           (&Server{Store: store, Poller: poller, Cabins: cabins, Address: address}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {

@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
@@ -15,30 +17,16 @@ import (
 //go:embed templates/*.html
 var templateFS embed.FS
 
-var templates = template.Must(template.New("").Funcs(template.FuncMap{
-	"describe": Describe,
-	"kort":     func(s string) string { return kortDato(parseDate(s)) },
-	"legDato": func(l Leg, start string) string {
-		from, _ := l.Stay(start)
-		return kortDato(from)
-	},
-	"klokke": func(t time.Time) string {
-		if t.IsZero() {
-			return "ikke ennå"
-		}
-		return t.In(oslo).Format("02.01. kl. 15:04")
-	},
-	"bookingURL": func(l Leg, start string, guests int) string {
-		from, to := l.Stay(start)
-		return BookingURL(l.CabinID, from, to, guests)
-	},
-}).ParseFS(templateFS, "templates/*.html"))
+var templates = template.Must(template.New("").ParseFS(templateFS, "templates/*.html"))
 
+// Server er «Mine varsler»: siden der hun legger til hytter, ser status og
+// fjerner dem. E-post brukes bare til selve varselet. Server-rendret HTML
+// med vanlige skjemaer, uten JavaScript.
 type Server struct {
 	Store   *Store
 	Poller  *Poller
-	Mailer  *Mailer
-	Address string // varseladressen, vises på siden
+	Cabins  *Directory // hyttelista det søkes i; kan mangle
+	Address string     // varseladressen, for dem som heller sender e-post
 }
 
 func (s *Server) Routes() http.Handler {
@@ -50,45 +38,129 @@ func (s *Server) Routes() http.Handler {
 	return mux
 }
 
+type freeLink struct{ Label, URL string }
+
 type watchView struct {
-	Watch
-	Free        []string
-	LastChecked time.Time
-	Errors      int
+	ID          int
+	Title, When string
+	Status      string // ledig, fullt, sjekkes eller feil
+	Free        []freeLink
+	MoreFree    int
+	LastChecked string
+}
+
+// formValues er det som står i skjemaet: det hun nettopp skrev når noe gikk
+// galt, ellers datoene fra forrige hytte, så neste hytte er ett felt unna.
+type formValues struct {
+	Cabin, Date, Until string
+	Weekends           bool
+	Nights, Guests     int
+	More               bool // «Flere datoer eller netter» står åpen
 }
 
 type indexData struct {
-	Active, Expired []watchView
-	Error, Notice   string
-	Today, MaxDate  string
-	Address         string
+	Active, Passed []watchView
+	Error, Notice  string
+	Today, MaxDate string
+	Address        string
+	Cabins         []Cabin
+	Form           formValues
+}
+
+const maxFreeLinks = 6
+
+func view(w Watch, now time.Time) watchView {
+	v := watchView{ID: w.ID, Title: w.Title(), When: Describe(w), Status: "fullt"}
+	var last time.Time
+	known, failed := 0, 0
+	for _, c := range w.Checks {
+		if c.LastChecked.After(last) {
+			last = c.LastChecked
+		}
+		if c.LastError != "" {
+			failed++
+		} else if c.Known {
+			known++
+		}
+	}
+	free := w.FreeStarts(now)
+	switch {
+	case len(free) > 0:
+		v.Status = "ledig"
+	case known == 0 && failed > 0:
+		v.Status = "feil"
+	case known == 0:
+		v.Status = "sjekkes"
+	}
+	for i, s := range free {
+		if i == maxFreeLinks {
+			v.MoreFree = len(free) - i
+			break
+		}
+		for _, l := range w.Legs {
+			from, to := l.Stay(s)
+			label := kortDato(from)
+			if w.IsRoute() {
+				label = l.Name() + " " + label
+			}
+			v.Free = append(v.Free, freeLink{label, BookingURL(l.CabinID, from, to, w.Guests)})
+		}
+	}
+	if !last.IsZero() {
+		v.LastChecked = last.In(oslo).Format("15:04")
+		if today(last) != today(now) {
+			v.LastChecked = last.In(oslo).Format("2.1. 15:04")
+		}
+	}
+	return v
+}
+
+func isWeekendSet(starts []string) bool {
+	for _, s := range starts {
+		if d := parseDate(s).Weekday(); d != time.Friday && d != time.Saturday {
+			return false
+		}
+	}
+	return len(starts) > 1
 }
 
 func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(oslo)
+	q := r.URL.Query()
 	d := indexData{
-		Error:   r.URL.Query().Get("feil"),
-		Notice:  r.URL.Query().Get("ok"),
+		Error:   q.Get("feil"),
+		Notice:  q.Get("ok"),
 		Today:   now.Format(dateLayout),
 		MaxDate: now.AddDate(0, bookAheadMo, 0).Format(dateLayout),
 		Address: s.Address,
+		Cabins:  s.Cabins.List(),
+		Form:    formValues{Nights: 1, Guests: 2},
 	}
+	var latest *Watch
 	for _, wa := range s.Store.List() {
-		v := watchView{Watch: wa, Free: wa.FreeStarts(now)}
-		for _, c := range wa.Checks {
-			if c.LastChecked.After(v.LastChecked) {
-				v.LastChecked = c.LastChecked
-			}
-			if c.LastError != "" {
-				v.Errors++
-			}
-		}
 		if wa.Expired(now) {
-			d.Expired = append(d.Expired, v)
-		} else {
-			d.Active = append(d.Active, v)
+			d.Passed = append(d.Passed, view(wa, now))
+			continue
+		}
+		d.Active = append(d.Active, view(wa, now))
+		if !wa.IsRoute() && (latest == nil || wa.ID > latest.ID) {
+			latest = &wa
 		}
 	}
+	if latest != nil {
+		starts := latest.ActiveStarts(now)
+		d.Form = formValues{Date: starts[0], Nights: latest.Legs[0].Nights, Guests: latest.Guests}
+		if len(starts) > 1 {
+			d.Form.Until, d.Form.Weekends = starts[len(starts)-1], isWeekendSet(starts)
+		}
+	}
+	if q.Has("hytte") { // skjemaet kom tilbake med en feil: vis det hun skrev
+		d.Form = formValues{
+			Cabin: q.Get("hytte"), Date: q.Get("dato"), Until: q.Get("til"), Weekends: q.Get("dager") == "helg",
+			Nights: max(atoiDefault(q.Get("netter"), 1), 1), Guests: max(atoiDefault(q.Get("personer"), 2), 1),
+		}
+	}
+	d.Form.More = d.Form.Until != "" || d.Form.Nights > 1
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := templates.ExecuteTemplate(w, "index.html", d); err != nil {
 		slog.Error("template", "err", err)
@@ -99,60 +171,138 @@ func redirect(w http.ResponseWriter, r *http.Request, key, msg string) {
 	http.Redirect(w, r, "/?"+url.Values{key: {msg}}.Encode(), http.StatusSeeOther)
 }
 
-func (s *Server) add(w http.ResponseWriter, r *http.Request) {
-	links := parseLinks(r.FormValue("hytter"))
-	if len(links) == 0 {
-		// Bare tallet godtas også.
-		if id, ok := ParseCabinID(r.FormValue("hytter")); ok {
-			links = []cabinLink{{id: id}}
-		}
+// fail sender henne tilbake til skjemaet med feilen og det hun skrev.
+func fail(w http.ResponseWriter, r *http.Request, msg string) {
+	q := url.Values{"feil": {msg}}
+	for _, k := range []string{"hytte", "dato", "til", "dager", "netter", "personer"} {
+		q.Set(k, r.FormValue(k))
 	}
-	if len(links) == 0 {
-		redirect(w, r, "feil", "Fant ingen hytte. Lim inn lenken fra hyttebestilling.dnt.no (den med /hytte/ og et tall).")
+	http.Redirect(w, r, "/?"+q.Encode()+"#ny", http.StatusSeeOther)
+}
+
+// cabins finner hyttene i søkefeltet: lenker fra DNT, eller et navn.
+func (s *Server) cabins(field string) ([]cabinLink, string) {
+	field = strings.TrimSpace(field)
+	if links := parseLinks(field); len(links) > 0 {
+		return links, ""
+	}
+	if id, ok := ParseCabinID(field); ok {
+		return []cabinLink{{id: id}}, ""
+	}
+	if field == "" {
+		return nil, "Skriv navnet på hytta, eller lim inn lenken fra hyttebestilling.dnt.no."
+	}
+	found := s.Cabins.Find(field)
+	switch {
+	case len(found) == 1:
+		return []cabinLink{{id: found[0].ID}}, ""
+	case len(found) == 0:
+		return nil, fmt.Sprintf("Fant ingen hytte som heter «%s». Prøv et annet navn, eller lim inn lenken fra hyttebestilling.dnt.no.", field)
+	}
+	names := make([]string, 0, 5)
+	for _, c := range found[:min(len(found), 5)] {
+		names = append(names, c.Label())
+	}
+	more := ""
+	if len(found) > 5 {
+		more = fmt.Sprintf(" og %d til", len(found)-5)
+	}
+	return nil, fmt.Sprintf("«%s» passer på flere hytter: %s%s. Velg en av dem fra lista.", field, strings.Join(names, "; "), more)
+}
+
+func (s *Server) add(w http.ResponseWriter, r *http.Request) {
+	links, msg := s.cabins(r.FormValue("hytte"))
+	if msg != "" {
+		fail(w, r, msg)
 		return
 	}
+	nights := atoiDefault(r.FormValue("netter"), 1)
+	guests := atoiDefault(r.FormValue("personer"), 1)
+
+	// Datoen fra skjemaet. Limte hun inn en lenke med datoer og lot feltet
+	// stå tomt, gjelder datoene i lenken.
 	from, err := time.ParseInLocation(dateLayout, r.FormValue("dato"), oslo)
 	if err != nil {
-		redirect(w, r, "feil", "Velg en ankomstdato.")
-		return
+		if links[0].from.IsZero() {
+			fail(w, r, "Velg en ankomstdato.")
+			return
+		}
+		from = links[0].from
+		if !links[0].to.IsZero() && r.FormValue("netter") == "" {
+			nights = int(links[0].to.Sub(from).Hours()/24 + 0.5)
+		}
 	}
 	until := from
 	if v := r.FormValue("til"); v != "" {
 		if until, err = time.ParseInLocation(dateLayout, v, oslo); err != nil || until.Before(from) {
-			redirect(w, r, "feil", "Siste ankomstdato må være etter den første.")
+			fail(w, r, "«Til og med» må være samme dag som ankomst eller senere.")
 			return
 		}
 	}
-	nights := atoiDefault(r.FormValue("netter"), 1)
-	guests := atoiDefault(r.FormValue("personer"), 1)
+	weekends := r.FormValue("dager") == "helg"
 	var starts []string
 	for d := from; !d.After(until); d = d.AddDate(0, 0, 1) {
+		if weekends && until.After(from) && d.Weekday() != time.Friday && d.Weekday() != time.Saturday {
+			continue
+		}
 		starts = append(starts, d.Format(dateLayout))
 	}
-	// Flere lenker følges hver for seg, som på e-post. «Rute» gjør dem til
-	// én tur der alle må være ledige etter tur.
-	var watches []Watch
-	if r.FormValue("rute") != "" && len(links) > 1 {
-		wa := Watch{Guests: guests, Starts: starts, Flexible: len(starts) > 1}
-		for i, l := range links {
-			wa.Legs = append(wa.Legs, Leg{CabinID: l.id, Offset: i * nights, Nights: nights})
-		}
-		watches = []Watch{wa}
-	} else {
-		for _, l := range links {
-			watches = append(watches, Watch{Guests: guests, Starts: slices.Clone(starts), Flexible: len(starts) > 1, Legs: []Leg{{CabinID: l.id, Nights: nights}}})
-		}
-	}
-	added, failed := AddAll(r.Context(), s.Store, s.Poller, s.Mailer, watches, "", "")
-	if len(added) == 0 {
-		redirect(w, r, "feil", "Fikk ikke lagt inn: "+strings.Join(failed, "; ")+".")
+	if len(starts) == 0 {
+		fail(w, r, "Det er ingen fredager eller lørdager mellom datoene du valgte.")
 		return
 	}
-	names := make([]string, len(added))
-	for i, wa := range added {
-		names[i] = wa.Title()
+
+	var names, failed []string
+	for i, l := range links {
+		if i > 0 && !s.Poller.sleep(r.Context()) {
+			break
+		}
+		wa, err := AddQuiet(r.Context(), s.Store, s.Poller, Watch{
+			Guests: guests, Starts: slices.Clone(starts), Flexible: len(starts) > 1,
+			Legs: []Leg{{CabinID: l.id, Nights: nights}},
+		})
+		if err != nil {
+			failed = append(failed, err.Error())
+			continue
+		}
+		names = append(names, wa.Title())
 	}
-	redirect(w, r, "ok", "Følger nå med på "+strings.Join(names, ", ")+".")
+	if len(names) == 0 {
+		fail(w, r, capitalize(strings.Join(failed, "; "))+".")
+		return
+	}
+	redirect(w, r, "ok", "Følger med på "+strings.Join(names, ", ")+". Du får e-post når det blir ledig.")
+}
+
+// AddQuiet legger inn en overvåking fra siden. Hun ser resultatet der, så
+// det sendes ingen bekreftelse på e-post, og det som alt er ledig vises på
+// siden i stedet for å bli varslet.
+func AddQuiet(ctx context.Context, store *Store, p *Poller, w Watch) (Watch, error) {
+	probe := w
+	if err := probe.Init(time.Now()); err == nil {
+		existing := store.List()
+		if j := slices.IndexFunc(existing, func(e Watch) bool { return sameWatch(e, probe) }); j >= 0 {
+			return existing[j], nil
+		}
+	}
+	w, err := AddWatch(ctx, store, p, w)
+	if err != nil {
+		return Watch{}, err
+	}
+	if len(w.Starts)*len(w.Legs) > 6 {
+		return w, nil // mange datoer: polleren sjekker dem, med kalenderen
+	}
+	p.CheckWatch(ctx, w.ID)
+	w, _ = store.Get(w.ID)
+	var free []string
+	for _, s := range w.ActiveStarts(time.Now()) {
+		if w.OptionFree(s) {
+			free = append(free, s)
+		}
+	}
+	p.MarkNotified(w.ID, free)
+	w, _ = store.Get(w.ID)
+	return w, nil
 }
 
 func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
@@ -161,11 +311,16 @@ func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	wa, ok := s.Store.Get(id)
 	if _, err := s.Store.Delete(id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	redirect(w, r, "ok", "Overvåkingen er fjernet.")
+	if !ok {
+		redirect(w, r, "ok", "Den var allerede fjernet.")
+		return
+	}
+	redirect(w, r, "ok", "Fjernet "+wa.Title()+".")
 }
 
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {

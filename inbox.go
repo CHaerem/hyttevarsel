@@ -414,7 +414,7 @@ func AddWatch(ctx context.Context, store *Store, p *Poller, w Watch) (Watch, err
 			}
 			return Watch{}, fmt.Errorf("DNT svarte ikke som ventet for hytte %d", l.CabinID)
 		}
-		name, err := p.DNT.CabinName(ctx, l.CabinID)
+		name, err := p.cabinName(ctx, l.CabinID)
 		if err != nil {
 			slog.Warn("fant ikke hyttenavnet", "cabin", l.CabinID, "err", err)
 		}
@@ -496,7 +496,7 @@ func (h *MailHandler) askDate(ctx context.Context, in Incoming, legs []Leg) {
 	links := make([]cabinLink, len(legs))
 	for i, l := range legs {
 		links[i] = cabinLink{id: l.CabinID}
-		name, err := h.Poller.DNT.CabinName(ctx, l.CabinID)
+		name, err := h.Poller.cabinName(ctx, l.CabinID)
 		if err != nil {
 			name = fmt.Sprintf("hytte %d", l.CabinID)
 		}

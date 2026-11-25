@@ -53,8 +53,14 @@ nevner hyttenavnet og ankomstdatoen. All annen e-post fra DNT ignoreres
 uten svar. Gjenkjenningen er laget uten en ekte bekreftelse å se på, og
 står derfor ikke i oppskriften til Kristine.
 
-Nettsiden på tailnettet viser det samme og kan også legge inn hytter. Den
-har ingen innlogging; tailnettet er porten.
+**Mine varsler (nettsiden):** hele tjenesten på én side. Hun søker opp
+hytta ved navn (DNTs egen liste over hytter med nettbooking, hentet én gang
+i døgnet og lagret i `hytter.json`) eller limer inn lenken, velger ankomst
+og antall personer, og ser hytta i lista med status, bestillingslenke når
+det er ledig, og «Fjern». «Flere datoer eller netter» gir en periode, alle
+dager eller bare helger. Det som legges inn her, bekreftes på siden og ikke
+på e-post; e-post brukes til varselet. Server-rendret HTML uten JavaScript.
+Siden har ingen innlogging; tailnettet er porten.
 
 ## Hvordan ledigheten hentes
 

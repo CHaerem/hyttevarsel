@@ -36,6 +36,7 @@ type Poller struct {
 	DNT      Checker
 	Notifier Notifier
 	Alarm    Alarm         // valgfri
+	Names    *Directory    // hyttenavn uten å hente hyttesiden; valgfri
 	Spacing  time.Duration // pause mellom to kall mot DNT
 	Cadence  Cadence
 
@@ -368,6 +369,14 @@ func (p *Poller) Round(ctx context.Context) {
 	p.watchdog(ctx, time.Now(), len(touched) > 0)
 }
 
+// cabinName gir navnet fra hyttelista, eller henter det fra hyttesiden.
+func (p *Poller) cabinName(ctx context.Context, id int) (string, error) {
+	if name := p.Names.Name(id); name != "" {
+		return name, nil
+	}
+	return p.DNT.CabinName(ctx, id)
+}
+
 // fillNames prøver igjen å finne navn som manglet da hytta ble lagt inn.
 func (p *Poller) fillNames(ctx context.Context) {
 	if time.Since(p.lastNameTry) < time.Hour {
@@ -379,7 +388,7 @@ func (p *Poller) fillNames(ctx context.Context) {
 			if l.CabinName != "" {
 				continue
 			}
-			name, err := p.DNT.CabinName(ctx, l.CabinID)
+			name, err := p.cabinName(ctx, l.CabinID)
 			if err != nil {
 				continue
 			}
