@@ -61,7 +61,7 @@
   h1 { font-size: clamp(28px, 6.6vw, 40px); line-height: 1.12; font-weight: 800; letter-spacing: -.015em; margin: 28px 0 10px; max-width: 17em; }
   .lead { font-size: 18px; color: var(--ink-2); margin: 0 0 22px; max-width: 34em; }
 
-  .address { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .address { margin-top: 4px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
   .address .label { font-size: 14px; color: var(--ink-2); width: 100%; }
   .address code { font: 600 16px var(--body); background: var(--sheet); color: var(--ink); border: 1px solid var(--rule); padding: 8px 12px; border-radius: 10px; user-select: all; word-break: break-all; }
   .copy { font: 600 15px var(--body); color: var(--fjord); background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
@@ -169,13 +169,7 @@
   <div class="wrap">
     <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20v-8l8-6 8 6v8z"/><path d="M10 20v-5h4v5"/></svg>Hyttevarsel</div>
     <h1>Varsel når en full DNT-hytte blir ledig</h1>
-    <p class="lead">Send lenken til hytta på e-post. Når noen avbestiller, får du en e-post med lenke rett til bestillingen.</p>
-    <div class="address" data-with-addr hidden>
-      <span class="label">Send hyttelenkene til</span>
-      <code class="addr" id="addr"></code>
-      <button class="copy" type="button" id="copy">Kopier</button>
-    </div>
-    <p class="address-missing" data-without-addr>Adressen du sender til, står i velkomst-e-posten fra Hyttevarsel. Åpne denne siden fra lenken der.</p>
+    <p class="lead">Søk opp hytta, velg dato, og få e-post når noen avbestiller.</p>
   </div>
 </header>
 
@@ -185,17 +179,16 @@
     <h2>Slik bruker du det</h2>
     <ol class="setup">
       <li>
-        <h3>Send lenken til hytta</h3>
-        <p class="why">Velg datoer og antall personer på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a>. Trykk Del og send lenken på e-post til Hyttevarsel. På PC kopierer du adressen fra adresselinja.</p>
-        <p class="why">Flere hytter? Lim inn flere lenker i samme e-post. Mange helger? Skriv for eksempel «helger i juni–august» i emnefeltet.</p>
+        <h3>Åpne Mine varsler</h3>
+        <p class="why">Lenken står i e-posten «Mine varsler» fra Hyttevarsel. Den er personlig og virker uten innlogging, så ikke del den videre.</p>
       </li>
       <li>
-        <h3>Vent på e-posten</h3>
-        <p class="why">Du får svar innen et par minutter. Når noen avbestiller, kommer en e-post med knappen Bestill nå, som åpner DNT-siden med datoene fylt inn.</p>
+        <h3>Søk opp hytta og velg dato</h3>
+        <p class="why">Skriv navnet på hytta, velg ankomst og antall personer, og trykk Følg med. Under «Flere datoer eller netter» velger du en periode, alle dager eller bare helger.</p>
       </li>
       <li>
-        <h3>Si fra når du har bestilt</h3>
-        <p class="why">Trykk «Jeg har booket» i e-posten, eller svar «stopp». Da slutter varslene for den hytta.</p>
+        <h3>Bestill når e-posten kommer</h3>
+        <p class="why">Når noen avbestiller, får du e-post med knappen Bestill nå. Hytta står da også som «Ledig nå» i Mine varsler. Der fjerner du den når du er ferdig.</p>
       </li>
     </ol>
   </section>
@@ -219,20 +212,29 @@
     <h2>Første gang</h2>
     <ol class="setup">
       <li>
-        <h3>Finn velkomst-e-posten</h3>
-        <p class="why">Den heter «Hyttevarsel er klart». Lagre avsenderen som kontakt. Lå den i søppelpost, marker den som «ikke søppelpost», ellers havner varslene der også.</p>
+        <h3>Legg Mine varsler på hjemskjermen</h3>
+        <p class="why">iPhone: åpne lenken i Safari, trykk Del og velg «Legg til på Hjem-skjerm». Android: åpne menyen i Chrome og velg «Legg til på startsiden».</p>
       </li>
       <li>
         <h3>Slå på varsler for Hyttevarsel</h3>
-        <p class="why">Gjør Hyttevarsel til favoritt i Outlook eller VIP i Mail, så sier telefonen fra når e-posten kommer.</p>
+        <p class="why">Gjør Hyttevarsel til favoritt i Outlook eller VIP i Mail, så sier telefonen fra når e-posten kommer. Lå e-postene i søppelpost, marker dem som «ikke søppelpost».</p>
       </li>
     </ol>
   </section>
 
   <section id="mer">
-    <h2>Mer</h2>
-    <details>
-      <summary>Send en hytte med ett trykk</summary>
+    <h2>Heller på e-post?</h2>
+    <p class="sec-lead">Du kan også sende hyttelenker rett til Hyttevarsel, uten å åpne siden.</p>
+    <div class="address" data-with-addr hidden>
+      <span class="label">Send hyttelenkene til</span>
+      <code class="addr" id="addr"></code>
+      <button class="copy" type="button" id="copy">Kopier</button>
+    </div>
+    <p class="address-missing" data-without-addr>Adressen står i e-postene fra Hyttevarsel.</p>
+    <details style="margin-top:16px">
+      <summary>Slik sender du en hytte</summary>
+      <div class="in">
+        <p style="margin-top:0">Velg datoer og antall personer på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a>, trykk Del og send lenken på e-post. Datoene følger med i lenken. Flere lenker i samme e-post følges hver for seg.</p>
       <div class="in">
 <div class="device">
           <input type="radio" name="device" id="d-iphone" checked>
@@ -285,7 +287,7 @@
       </div>
     </details>
     <details>
-      <summary>Mange datoer og mange hytter</summary>
+      <summary>Datoer i emnefeltet</summary>
       <div class="in">
         <p style="margin-top:0">Skriv datoen i emnefeltet når du sender lenken. Prøv her hvordan Hyttevarsel forstår det:</p>
     <label class="try-label" for="try">Emnefelt</label>
