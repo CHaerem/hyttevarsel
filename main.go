@@ -5,10 +5,13 @@ package main
 import (
 	"cmp"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -68,8 +71,35 @@ func main() {
 		poller.Alarm = &VarselAgent{URLFile: dir + "/url", TokenFile: dir + "/token", Client: &http.Client{Timeout: 30 * time.Second}}
 	}
 
+	// SECRET_LINK=on legger siden bak en hemmelig personlig lenke (web.go).
+	// Lenken lages her første gang og ligger i volumet, så den aldri går
+	// gjennom git, chat eller loggen. SEND_LINK=on sender den til MAIL_TO
+	// når siden svarer på BASE_URL.
+	token, appURL := "", ""
+	if os.Getenv("SECRET_LINK") == "on" {
+		if token, err = loadOrCreateToken(cmp.Or(os.Getenv("DATA_DIR"), "data")); err != nil {
+			slog.Error("kan ikke lage den hemmelige lenken", "err", err)
+			os.Exit(1)
+		}
+		if base := strings.TrimRight(os.Getenv("BASE_URL"), "/"); base != "" {
+			appURL = base + "/" + token + "/"
+			mailer.AppURL = func() string {
+				if store.LinkSent() {
+					return appURL
+				}
+				return ""
+			}
+		} else {
+			slog.Warn("BASE_URL mangler; lenken til Mine varsler kan ikke sendes på e-post")
+		}
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if appURL != "" && os.Getenv("SEND_LINK") == "on" && os.Getenv("SMTP_HOST") != "" && len(mailer.To) > 0 {
+		health := strings.TrimRight(os.Getenv("BASE_URL"), "/") + "/healthz"
+		go RunLink(ctx, store, mailer, appURL, health, &http.Client{Timeout: 15 * time.Second})
+	}
 	go poller.Run(ctx)
 	go cabins.Run(ctx)
 	go RunSummary(ctx, store, mailer)
@@ -91,8 +121,12 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              cmp.Or(os.Getenv("LISTEN"), ":8080"),
-		Handler:           (&Server{Store: store, Poller: poller, Cabins: cabins, Address: address}).Routes(),
+		Handler:           (&Server{Store: store, Poller: poller, Cabins: cabins, Address: address, Token: token}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      90 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    16 << 10,
 	}
 	go func() {
 		<-ctx.Done()
@@ -100,11 +134,27 @@ func main() {
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	slog.Info("lytter", "addr", srv.Addr, "cadence", cadence, "overvåkinger", len(store.List()))
+	slog.Info("lytter", "addr", srv.Addr, "cadence", cadence, "overvåkinger", len(store.List()), "hemmelig lenke", token != "")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server", "err", err)
 		os.Exit(1)
 	}
+}
+
+// loadOrCreateToken gir den hemmelige delen av lenken: 32 tilfeldige byte.
+func loadOrCreateToken(dir string) (string, error) {
+	path := filepath.Join(dir, "lenke")
+	if b, err := os.ReadFile(path); err == nil {
+		if t := strings.TrimSpace(string(b)); len(t) >= 40 {
+			return t, nil
+		}
+	}
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	t := base64.RawURLEncoding.EncodeToString(raw)
+	return t, os.WriteFile(path, []byte(t+"\n"), 0o600)
 }
 
 // parseCadence leser «2m,5m,15m» (≤10 dager, ≤30 dager, lenger fram).

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"embed"
 	"fmt"
 	"html/template"
@@ -27,6 +28,20 @@ type Server struct {
 	Poller  *Poller
 	Cabins  *Directory // hyttelista det søkes i; kan mangle
 	Address string     // varseladressen, for dem som heller sender e-post
+
+	// Token gjør siden til en hemmelig personlig lenke: alt ligger under
+	// /<token>/, og alt annet enn /healthz svarer 404. Brukes når siden er
+	// åpnet mot internett (Tailscale Funnel), der tailnettet ikke lenger
+	// er porten. Lenken ligger i stien og ikke i en informasjonskapsel, så
+	// den virker likt som bokmerke, på hjemskjermen og i en annen nettleser.
+	Token string
+}
+
+func (s *Server) base() string {
+	if s.Token == "" {
+		return ""
+	}
+	return "/" + s.Token
 }
 
 func (s *Server) Routes() http.Handler {
@@ -35,7 +50,43 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /watches", s.add)
 	mux.HandleFunc("POST /watches/{id}/delete", s.delete)
 	mux.HandleFunc("GET /healthz", s.healthz)
-	return mux
+	app := secure(mux)
+	if s.Token == "" {
+		return app
+	}
+	inner := http.StripPrefix("/"+s.Token, app)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			s.healthz(w, r)
+			return
+		}
+		first, _, slash := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
+		if subtle.ConstantTimeCompare([]byte(first), []byte(s.Token)) != 1 {
+			http.NotFound(w, r)
+			return
+		}
+		if !slash { // /<token> uten skråstrek: skjemaene trenger den
+			http.Redirect(w, r, "/"+s.Token+"/", http.StatusSeeOther)
+			return
+		}
+		inner.ServeHTTP(w, r)
+	})
+}
+
+// secure setter hodene en side på åpent nett bør ha: ingen henviser ut
+// (lenken er hemmelig), ingen mellomlagring, ingen innramming, og bare
+// sidens egne stiler og skjemaer.
+func secure(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("Referrer-Policy", "no-referrer")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Robots-Tag", "noindex, nofollow")
+		h.Set("Cache-Control", "no-store")
+		h.Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+		r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+		next.ServeHTTP(w, r)
+	})
 }
 
 type freeLink struct{ Label, URL string }
@@ -65,6 +116,7 @@ type indexData struct {
 	Address        string
 	Cabins         []Cabin
 	Form           formValues
+	Base           string // stien skjemaene sender til, tom eller /<token>
 }
 
 const maxFreeLinks = 6
@@ -133,6 +185,7 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 		Today:   now.Format(dateLayout),
 		MaxDate: now.AddDate(0, bookAheadMo, 0).Format(dateLayout),
 		Address: s.Address,
+		Base:    s.base(),
 		Cabins:  s.Cabins.List(),
 		Form:    formValues{Nights: 1, Guests: 2},
 	}
@@ -167,17 +220,17 @@ func (s *Server) index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func redirect(w http.ResponseWriter, r *http.Request, key, msg string) {
-	http.Redirect(w, r, "/?"+url.Values{key: {msg}}.Encode(), http.StatusSeeOther)
+func (s *Server) redirect(w http.ResponseWriter, r *http.Request, key, msg string) {
+	http.Redirect(w, r, s.base()+"/?"+url.Values{key: {msg}}.Encode(), http.StatusSeeOther)
 }
 
 // fail sender henne tilbake til skjemaet med feilen og det hun skrev.
-func fail(w http.ResponseWriter, r *http.Request, msg string) {
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, msg string) {
 	q := url.Values{"feil": {msg}}
 	for _, k := range []string{"hytte", "dato", "til", "dager", "netter", "personer"} {
 		q.Set(k, r.FormValue(k))
 	}
-	http.Redirect(w, r, "/?"+q.Encode()+"#ny", http.StatusSeeOther)
+	http.Redirect(w, r, s.base()+"/?"+q.Encode()+"#ny", http.StatusSeeOther)
 }
 
 // cabins finner hyttene i søkefeltet: lenker fra DNT, eller et navn.
@@ -213,7 +266,7 @@ func (s *Server) cabins(field string) ([]cabinLink, string) {
 func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 	links, msg := s.cabins(r.FormValue("hytte"))
 	if msg != "" {
-		fail(w, r, msg)
+		s.fail(w, r, msg)
 		return
 	}
 	nights := atoiDefault(r.FormValue("netter"), 1)
@@ -224,7 +277,7 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 	from, err := time.ParseInLocation(dateLayout, r.FormValue("dato"), oslo)
 	if err != nil {
 		if links[0].from.IsZero() {
-			fail(w, r, "Velg en ankomstdato.")
+			s.fail(w, r, "Velg en ankomstdato.")
 			return
 		}
 		from = links[0].from
@@ -235,7 +288,7 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 	until := from
 	if v := r.FormValue("til"); v != "" {
 		if until, err = time.ParseInLocation(dateLayout, v, oslo); err != nil || until.Before(from) {
-			fail(w, r, "«Til og med» må være samme dag som ankomst eller senere.")
+			s.fail(w, r, "«Til og med» må være samme dag som ankomst eller senere.")
 			return
 		}
 	}
@@ -248,7 +301,7 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 		starts = append(starts, d.Format(dateLayout))
 	}
 	if len(starts) == 0 {
-		fail(w, r, "Det er ingen fredager eller lørdager mellom datoene du valgte.")
+		s.fail(w, r, "Det er ingen fredager eller lørdager mellom datoene du valgte.")
 		return
 	}
 
@@ -268,10 +321,10 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 		names = append(names, wa.Title())
 	}
 	if len(names) == 0 {
-		fail(w, r, capitalize(strings.Join(failed, "; "))+".")
+		s.fail(w, r, capitalize(strings.Join(failed, "; "))+".")
 		return
 	}
-	redirect(w, r, "ok", "Følger med på "+strings.Join(names, ", ")+". Du får e-post når det blir ledig.")
+	s.redirect(w, r, "ok", "Følger med på "+strings.Join(names, ", ")+". Du får e-post når det blir ledig.")
 }
 
 // AddQuiet legger inn en overvåking fra siden. Hun ser resultatet der, så
@@ -317,10 +370,10 @@ func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		redirect(w, r, "ok", "Den var allerede fjernet.")
+		s.redirect(w, r, "ok", "Den var allerede fjernet.")
 		return
 	}
-	redirect(w, r, "ok", "Fjernet "+wa.Title()+".")
+	s.redirect(w, r, "ok", "Fjernet "+wa.Title()+".")
 }
 
 func (s *Server) healthz(w http.ResponseWriter, _ *http.Request) {

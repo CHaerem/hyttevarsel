@@ -119,3 +119,85 @@ func TestCabinListParsing(t *testing.T) {
 		t.Fatalf("%+v, %v", got, err)
 	}
 }
+
+func TestSecretLink(t *testing.T) {
+	_, store, p, _, m := setup(t)
+	const token = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"
+	h := (&Server{Store: store, Poller: p, Address: m.Address, Token: token}).Routes()
+	get := func(path string) *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
+		return rec
+	}
+
+	// Uten lenken finnes ingenting, verken siden eller skjemaene.
+	for _, path := range []string{"/", "/watches", "/feil-lenke/", "/" + token[:len(token)-1] + "/", "/" + token + "x/", "//" + token + "/"} {
+		if rec := get(path); rec.Code != http.StatusNotFound || strings.Contains(rec.Body.String(), "Mine varsler") {
+			t.Errorf("GET %s: %d, vil ha 404 uten innhold", path, rec.Code)
+		}
+	}
+	if rec := post(h, "/watches", url.Values{"hytte": {"https://hyttebestilling.dnt.no/hytte/5"}, "dato": {future(30)}}); rec.Code != http.StatusNotFound || len(store.List()) != 0 {
+		t.Fatalf("POST uten lenken: %d, %d overvåkinger", rec.Code, len(store.List()))
+	}
+	if rec := post(h, "/watches/1/delete", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("slett uten lenken: %d", rec.Code)
+	}
+	if rec := get("/healthz"); rec.Code != http.StatusOK {
+		t.Fatalf("healthz skal være åpen for kubelet og selvsjekken: %d", rec.Code)
+	}
+
+	// Med lenken virker alt, og skjemaene peker tilbake under lenken.
+	if rec := get("/" + token); rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/"+token+"/" {
+		t.Fatalf("uten skråstrek: %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	rec := get("/" + token + "/")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `action="/`+token+`/watches"`) {
+		t.Fatalf("siden under lenken: %d", rec.Code)
+	}
+	for k, want := range map[string]string{"Referrer-Policy": "no-referrer", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"} {
+		if got := rec.Header().Get(k); got != want {
+			t.Errorf("%s: %q", k, got)
+		}
+	}
+	rec = post(h, "/"+token+"/watches", url.Values{"hytte": {"https://hyttebestilling.dnt.no/hytte/5"}, "dato": {future(30)}, "personer": {"2"}})
+	if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/"+token+"/?ok=") || len(store.List()) != 1 {
+		t.Fatalf("legg til under lenken: %d %q", rec.Code, loc)
+	}
+	if body := get("/" + token + "/").Body.String(); !strings.Contains(body, `action="/`+token+`/watches/1/delete"`) {
+		t.Fatalf("fjern-skjemaet peker ikke under lenken")
+	}
+	rec = post(h, "/"+token+"/watches/1/delete", nil)
+	if !strings.HasPrefix(rec.Header().Get("Location"), "/"+token+"/?ok=") || len(store.List()) != 0 {
+		t.Fatalf("fjern under lenken: %q", rec.Header().Get("Location"))
+	}
+}
+
+func TestLinkMailWaitsUntilReachable(t *testing.T) {
+	_, store, _, sent, m := setup(t)
+	up := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !up {
+			http.Error(w, "nei", http.StatusBadGateway)
+		}
+	}))
+	defer ts.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // én runde, uten å vente et minutt
+	RunLink(ctx, store, m, "https://eksempel.ts.net/hemmelig/", ts.URL+"/healthz", ts.Client())
+	if len(sent.msgs) != 0 || store.LinkSent() {
+		t.Fatal("lenken skal ikke sendes før siden svarer")
+	}
+	up = true
+	RunLink(context.Background(), store, m, "https://eksempel.ts.net/hemmelig/", ts.URL+"/healthz", ts.Client())
+	RunLink(context.Background(), store, m, "https://eksempel.ts.net/hemmelig/", ts.URL+"/healthz", ts.Client())
+	if got := sent.subjects(); len(got) != 1 || !strings.Contains(sent.msgs[0].HTML, `href="https://eksempel.ts.net/hemmelig/"`) || !store.LinkSent() {
+		t.Fatalf("vil ha lenken sendt én gang: %v", got)
+	}
+
+	dir := t.TempDir()
+	a, err := loadOrCreateToken(dir)
+	b, _ := loadOrCreateToken(dir)
+	if err != nil || len(a) != 43 || a != b {
+		t.Fatalf("lenken skal lages én gang og være stabil: %q %q %v", a, b, err)
+	}
+}

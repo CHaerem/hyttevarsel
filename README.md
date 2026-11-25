@@ -60,7 +60,20 @@ og antall personer, og ser hytta i lista med status, bestillingslenke når
 det er ledig, og «Fjern». «Flere datoer eller netter» gir en periode, alle
 dager eller bare helger. Det som legges inn her, bekreftes på siden og ikke
 på e-post; e-post brukes til varselet. Server-rendret HTML uten JavaScript.
-Siden har ingen innlogging; tailnettet er porten.
+Uten `SECRET_LINK` har siden ingen innlogging; tailnettet er porten.
+
+**Hemmelig personlig lenke (`SECRET_LINK=on`):** for når siden åpnes mot
+internett med Tailscale Funnel, så hun når den uten Tailscale. Alt ligger
+da under `/<token>/`, og alt annet enn `/healthz` svarer 404. Tokenet er
+32 tilfeldige byte som tjenesten lager selv første gang og legger i
+volumet (`lenke`), så det aldri går gjennom git, chat eller loggen. Det
+står i stien og ikke i en informasjonskapsel, så lenken virker som
+bokmerke og på hjemskjermen. Sidene sendes med `Referrer-Policy:
+no-referrer`, `Cache-Control: no-store` og en streng CSP. Med
+`SEND_LINK=on` sender tjenesten lenken til `MAIL_TO` én gang, når siden
+svarer på `BASE_URL/healthz`, og legger den deretter nederst i varslene.
+Ny lenke: slett fila `lenke` og `link_sent` i `watches.json`, og start på
+nytt.
 
 ## Hvordan ledigheten hentes
 
@@ -116,6 +129,9 @@ time). `/healthz` sier bare om løkka går, for en omstart fikser ikke DNT.
 | `IMAP_AUTHSERV` | `mx.google.com` | hvem sin Authentication-Results som gjelder |
 | `BOOKING_DOMAINS` | `dnt.no,visbook.com` | avsenderdomenene til ordrebekreftelsene |
 | `PAGE_URL` | GitHub Pages-siden | oppskriften det lenkes til i e-postene |
+| `SECRET_LINK` | | `on` legger siden bak en hemmelig personlig lenke |
+| `BASE_URL` | | den offentlige adressen til siden, uten sti; trengs for å sende lenken |
+| `SEND_LINK` | | `on` sender lenken til `MAIL_TO` når siden svarer utenfra |
 | `WELCOME` | | `off` slår av velkomst-e-posten |
 | `VARSEL_AGENT_DIR` | | mappe med `url` og `token` til varselagenten |
 

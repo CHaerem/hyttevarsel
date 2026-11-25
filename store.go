@@ -194,6 +194,7 @@ type storeData struct {
 	NextID      int       `json:"next_id"`
 	Watches     []*Watch  `json:"watches"`
 	WelcomeSent bool      `json:"welcome_sent"`
+	LinkSent    bool      `json:"link_sent"`
 	LastSummary time.Time `json:"last_summary"`
 	LastAlarm   time.Time `json:"last_alarm"`
 }
@@ -305,6 +306,20 @@ func (s *Store) SetWelcomeSent() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.data.WelcomeSent = true
+	return s.saveLocked()
+}
+
+// LinkSent er sann når hun har fått lenken til «Mine varsler» på e-post.
+func (s *Store) LinkSent() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.data.LinkSent
+}
+
+func (s *Store) SetLinkSent() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data.LinkSent = true
 	return s.saveLocked()
 }
 

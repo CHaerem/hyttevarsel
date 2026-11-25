@@ -106,7 +106,7 @@
         {{end}}
         <div class="foot">
           <span>{{if .LastChecked}}Sist sjekket {{.LastChecked}}{{else}}Ikke sjekket ennå{{end}}</span>
-          <form method="post" action="/watches/{{.ID}}/delete"><button class="linkbtn" type="submit">Fjern</button></form>
+          <form method="post" action="{{$.Base}}/watches/{{.ID}}/delete"><button class="linkbtn" type="submit">Fjern</button></form>
         </div>
       </li>
       {{end}}
@@ -118,7 +118,7 @@
 
   <section id="ny">
     <h2 class="h">Følg med på en hytte</h2>
-    <form class="add" method="post" action="/watches">
+    <form class="add" method="post" action="{{.Base}}/watches">
       <div>
         <label for="hytte">Hytte</label>
         <input id="hytte" name="hytte" type="text" list="hytter" required autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Navn på hytta, eller lenke fra DNT" value="{{.Form.Cabin}}">
@@ -166,7 +166,7 @@
         <div class="top"><h2>{{.Title}}</h2></div>
         <p class="when">{{.When}}</p>
         <div class="foot"><span>Fjernes av seg selv etter to uker</span>
-          <form method="post" action="/watches/{{.ID}}/delete"><button class="linkbtn" type="submit">Fjern nå</button></form></div>
+          <form method="post" action="{{$.Base}}/watches/{{.ID}}/delete"><button class="linkbtn" type="submit">Fjern nå</button></form></div>
       </li>
       {{end}}
     </ul>

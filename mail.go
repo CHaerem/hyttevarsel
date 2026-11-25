@@ -41,6 +41,35 @@ type Mailer struct {
 	Address string   // varseladressen, f.eks. hyttevarsel@gmail.com
 	To      []string // mottakere av varsler og oppsummering
 	PageURL string   // oppskriftssiden, valgfri
+
+	// AppURL gir den personlige lenken til «Mine varsler», eller tom streng
+	// til hun har fått den (da virker den også utenfra).
+	AppURL func() string
+}
+
+// appLink er lenken til «Mine varsler» som legges nederst i e-postene.
+func (m *Mailer) appLink() []mailLink {
+	if m.AppURL == nil {
+		return nil
+	}
+	if u := m.AppURL(); u != "" {
+		return []mailLink{{"Mine varsler", u}}
+	}
+	return nil
+}
+
+// Link sender den personlige lenken til «Mine varsler».
+func (m *Mailer) Link(ctx context.Context, appURL string) error {
+	d := mailData{
+		Heading: "Mine varsler",
+		Lines: []string{
+			"Hyttevarsel har fått en egen side. Der søker du opp hytta, velger dato og ser alt du følger med på.",
+			"Lenken er personlig og virker uten innlogging, så ikke del den videre. Lagre den som bokmerke, eller legg den på hjemskjermen.",
+		},
+		Buttons: []mailLink{{"Åpne Mine varsler", appURL}},
+		Footer:  "Varslene kommer fortsatt på e-post. Du kan også sende hyttelenker hit som før.",
+	}
+	return m.send(ctx, m.To, "Mine varsler: din side hos Hyttevarsel", "", "", d)
 }
 
 // watchAddr er svaradressen for én overvåking: varseladressen med «+h<id>».
@@ -220,6 +249,7 @@ func (m *Mailer) available(ctx context.Context, w Watch, starts []string, inRepl
 		d.Links = []mailLink{{"Slutt å følge med på " + w.Title(), m.stopURL(w)}}
 		d.Footer = "Hyttevarsel følger med på alle datoene til du trykker lenken over eller svarer «stopp» på denne e-posten."
 	}
+	d.Links = append(d.Links, m.appLink()...)
 	first, _ := w.Legs[0].Stay(starts[0])
 	subject := fmt.Sprintf("Ledig: %s %s", w.Title(), kortDato(first))
 	if len(starts) > 1 {
@@ -239,7 +269,9 @@ func (m *Mailer) Confirm(ctx context.Context, w Watch, inReplyTo string, checkin
 	}
 	d.Lines = append(d.Lines, "Stemmer det ikke, svar «stopp» og send lenken på nytt med datoen i emnefeltet.")
 	d.Links = []mailLink{{"Slutt å følge med", m.stopURL(w)}}
-	if p := m.page(); p != "" {
+	if app := m.appLink(); app != nil {
+		d.Links = append(d.Links, app...)
+	} else if p := m.page(); p != "" {
 		d.Links = append(d.Links, mailLink{"Slik bruker du Hyttevarsel", p})
 	}
 	return m.send(ctx, m.recipients(w), "Følger med: "+w.Title()+", "+Short(w), inReplyTo, m.watchAddr(w), d)
@@ -319,6 +351,7 @@ func (m *Mailer) Summary(ctx context.Context, to []string, watches []Watch, inRe
 	} else {
 		d.Footer = "Trykk Stopp ved en hytte, eller svar «stopp alt» for å stoppe alle."
 	}
+	d.Links = m.appLink()
 	if subject == "" {
 		subject = "Hyttevarsel: oversikt"
 	}
