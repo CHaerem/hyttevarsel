@@ -8,37 +8,45 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23163b2e'/%3E%3Cpath d='M8 22 16 9l8 13' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Kartpreg: hvitt kartpapir, granfarget tekst, høydekurver som eneste pynt.
-     Fjordblå er handlingsfargen; kurvebrun brukes bare til kartdetaljer. */
+  /* Hyttekos en vinterkveld: ullhvitt og lys furu om dagen, kvelds-
+     himmel og lampelys i toppen. Furugrønt er handlingsfargen,
+     falurødt (hytteveggen) og strikkemønsteret er detaljene. */
   :root {
-    --paper: #f4f7f5;
-    --sheet: #ffffff;
-    --ink: #13241d;
-    --ink-2: #4d5f57;
-    --rule: #dbe4df;
-    --fjord: #1d5fa3;
-    --fjord-soft: #e4eef8;
+    --paper: #f8f3ec;        /* ull */
+    --sheet: #fffdf9;
+    --ink: #2b2420;          /* mørkt treverk */
+    --ink-2: #6e625a;
+    --rule: #eadfd2;
+    --fjord: #2f6249;        /* furugrønn: knapper og lenker */
+    --fjord-soft: #e6efe7;
     --on-fjord: #ffffff;
-    --contour: #c49a6c;
-    --spruce: #163b2e;
-    --ok: #2b7a4b;
-    --display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
-    --body: "Schibsted Grotesk", -apple-system, "Segoe UI", Roboto, sans-serif;
-    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    --contour: #a8352c;      /* falurød */
+    --spruce: #a8352c;
+    --ok: #2f6249;
+    --night: #1e3340;        /* kveldshimmel */
+    --night-2: #2c4a52;
+    --lamp: #f5b95c;         /* vinduslys */
+    --snow: #f3f1ee;
+    --on-night: #f6efe6;
+    --display: "Nunito", "Avenir Next", "Segoe UI", sans-serif;
+    --body: "Figtree", -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "Figtree", -apple-system, "Segoe UI", sans-serif;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --paper: #0f1613; --sheet: #17201c; --ink: #e7eeea; --ink-2: #9fb0a8; --rule: #2a3631;
-      --fjord: #79b3ee; --fjord-soft: #1a2a3a; --on-fjord: #0b1a2a; --contour: #8a6a49; --spruce: #9fd4b8; --ok: #7fcf9c;
+      --paper: #1b1714; --sheet: #25201c; --ink: #f1e8dd; --ink-2: #bcae9f; --rule: #3a322b;
+      --fjord: #93cfa9; --fjord-soft: #22302a; --on-fjord: #142019; --contour: #e98a7c; --spruce: #e98a7c; --ok: #93cfa9;
+      --night: #131f27; --night-2: #1d2f35; --snow: #2a2f33; --on-night: #f1e8dd;
       color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
-    --paper: #0f1613; --sheet: #17201c; --ink: #e7eeea; --ink-2: #9fb0a8; --rule: #2a3631;
-    --fjord: #79b3ee; --fjord-soft: #1a2a3a; --on-fjord: #0b1a2a; --contour: #8a6a49; --spruce: #9fd4b8; --ok: #7fcf9c;
+    --paper: #1b1714; --sheet: #25201c; --ink: #f1e8dd; --ink-2: #bcae9f; --rule: #3a322b;
+    --fjord: #93cfa9; --fjord-soft: #22302a; --on-fjord: #142019; --contour: #e98a7c; --spruce: #e98a7c; --ok: #93cfa9;
+    --night: #131f27; --night-2: #1d2f35; --snow: #2a2f33; --on-night: #f1e8dd;
     color-scheme: dark;
   }
 
@@ -51,36 +59,45 @@
   h1, h2, h3, h4 { font-family: var(--display); text-wrap: balance; margin: 0; }
   :focus-visible { outline: 3px solid var(--fjord); outline-offset: 2px; border-radius: 6px; }
 
-  /* Toppen: høydekurver bak, stegene er selve budskapet */
-  .top { position: relative; overflow: hidden; border-bottom: 1px solid var(--rule); background: var(--sheet); }
-  .top .contours { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--contour); opacity: .4; pointer-events: none; }
-  .top .wrap { position: relative; padding-block: 28px 34px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; color: var(--spruce); }
-  .brand svg { width: 26px; height: 26px; }
-  h1 { font-size: clamp(30px, 7.4vw, 46px); line-height: 1.08; font-weight: 800; letter-spacing: -.02em; margin: 26px 0 10px; max-width: 15em; }
-  .lead { font-size: 18px; color: var(--ink-2); margin: 0 0 24px; max-width: 34em; }
+  /* Toppen: en vinterkveld med en opplyst hytte */
+  .top { position: relative; overflow: hidden; background: linear-gradient(180deg, var(--night) 0%, var(--night-2) 100%); color: var(--on-night); }
+  .top .wrap { position: relative; z-index: 1; padding-block: 28px 150px; }
+  .scene { position: absolute; left: 0; right: 0; bottom: 0; height: 170px; pointer-events: none; }
+  .scene .snow { position: absolute; inset: auto 0 0 0; width: 100%; height: 70px; display: block; }
+  .scene .cabin { position: absolute; bottom: 30px; right: max(18px, calc(50% - 360px)); width: 190px; height: 140px; }
+  .stars { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .brand { display: flex; align-items: center; gap: 10px; font: 900 18px var(--display); color: var(--on-night); }
+  .brand svg { width: 28px; height: 28px; }
+  h1 { font-size: clamp(32px, 8vw, 50px); line-height: 1.06; font-weight: 900; letter-spacing: -.015em; margin: 26px 0 12px; max-width: 13em; }
+  h1 em { font-style: normal; color: var(--lamp); }
+  .lead { font-size: 18px; color: color-mix(in srgb, var(--on-night) 80%, transparent); margin: 0 0 22px; max-width: 32em; }
 
-  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; padding: 0; list-style: none; }
-  .flow li { background: var(--paper); border: 1px solid var(--rule); border-radius: 14px; padding: 12px; min-width: 0; }
-  .flow b { display: flex; align-items: center; gap: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-2); font-weight: 700; }
-  .flow b span { width: 20px; height: 20px; border-radius: 50%; background: var(--spruce); color: var(--sheet); display: grid; place-items: center; font-size: 12px; letter-spacing: 0; flex: none; }
+  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0; padding: 0; list-style: none; max-width: 560px; }
+  .flow li { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: 20px; padding: 12px; min-width: 0; }
+  .flow b { display: flex; align-items: center; gap: 6px; font: 800 13px var(--display); text-transform: uppercase; letter-spacing: .06em; color: var(--lamp); }
+  .flow b span { width: 20px; height: 20px; border-radius: 50%; background: var(--lamp); color: var(--night); display: grid; place-items: center; font-size: 12px; letter-spacing: 0; flex: none; }
   .flow p { margin: 6px 0 0; font-size: 15px; line-height: 1.35; font-weight: 600; }
 
+  /* Strikkemønster mellom kveld og innhold */
+  .knit { height: 26px; background-color: var(--sheet); border-bottom: 1px solid var(--rule);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'%3E%3Cg fill='%23a8352c'%3E%3Cpath d='M13 4l2 4 4-2-2 4 4 2-4 2 2 4-4-2-2 4-2-4-4 2 2-4-4-2 4-2-2-4 4 2z'/%3E%3Ccircle cx='0' cy='13' r='1.4'/%3E%3Ccircle cx='26' cy='13' r='1.4'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: repeat-x; background-position: center; }
+
   .address { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
-  .address .label { font-size: 14px; color: var(--ink-2); width: 100%; }
-  .address code { font: 500 15.5px var(--mono); background: var(--fjord-soft); color: var(--ink); padding: 8px 12px; border-radius: 10px; user-select: all; word-break: break-all; }
-  .copy { font: 600 15px var(--body); color: var(--fjord); background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
-  .copy[data-done] { color: var(--ok); border-color: var(--ok); }
+  .address .label { font-size: 14px; color: color-mix(in srgb, var(--on-night) 75%, transparent); width: 100%; }
+  .address code { font: 700 16px var(--body); background: rgba(255,255,255,.12); color: var(--on-night); border: 1px solid rgba(255,255,255,.18); padding: 8px 12px; border-radius: 10px; user-select: all; word-break: break-all; }
+  .copy { font: 700 15px var(--body); color: var(--night); background: var(--lamp); border: 0; border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+  .copy[data-done] { background: var(--on-night); }
 
   section { padding-block: 40px 0; }
-  h2 { font-size: 26px; font-weight: 800; letter-spacing: -.01em; }
+  h2 { font-size: 28px; font-weight: 900; letter-spacing: -.01em; }
   .sec-lead { color: var(--ink-2); margin: 6px 0 18px; }
 
   /* Kom i gang: en sjekkliste */
   .setup { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; counter-reset: n; }
-  .setup > li { background: var(--sheet); border: 1px solid var(--rule); border-radius: 16px; padding: 18px; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 2px 14px; counter-increment: n; }
-  .setup > li::before { content: counter(n); grid-row: 1 / span 3; width: 34px; height: 34px; border-radius: 50%; border: 2px solid var(--spruce); color: var(--spruce); font-weight: 800; display: grid; place-items: center; }
-  .setup h3 { font-size: 19px; font-weight: 700; line-height: 1.3; padding-top: 4px; }
+  .setup > li { background: var(--sheet); border: 1px solid var(--rule); box-shadow: 0 1px 0 var(--rule), 0 8px 24px -16px rgba(80,50,30,.35); border-radius: 20px; padding: 18px; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 2px 14px; counter-increment: n; }
+  .setup > li::before { content: counter(n); grid-row: 1 / span 3; width: 34px; height: 34px; border-radius: 50%; background: var(--spruce); color: var(--sheet); font: 900 16px var(--display); display: grid; place-items: center; }
+  .setup h3 { font-size: 20px; font-weight: 800; line-height: 1.3; padding-top: 4px; }
   .setup .why { margin: 2px 0 0; color: var(--ink-2); font-size: 16px; }
   .setup .body { grid-column: 2; min-width: 0; margin-top: 14px; }
 
@@ -111,13 +128,13 @@
   #m-outlook:checked ~ .bm-outlook, #m-gmail:checked ~ .bm-gmail, #m-annet:checked ~ .bm-annet { display: inline-flex; }
 
   /* Varseleksempelet */
-  .alert { background: var(--sheet); border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; max-width: 520px; }
+  .alert { background: var(--sheet); border: 1px solid var(--rule); border-radius: 20px; overflow: hidden; max-width: 520px; }
   .alert .head { display: flex; gap: 10px; align-items: baseline; padding: 12px 16px; border-bottom: 1px solid var(--rule); font-size: 14px; color: var(--ink-2); flex-wrap: wrap; }
   .alert .head b { color: var(--ink); }
   .alert .content { padding: 16px; }
   .alert h3 { font-size: 20px; font-weight: 800; }
   .alert .meta { margin: 4px 0 14px; color: var(--ink-2); font-size: 15px; }
-  .alert .meta .moh { font-family: var(--mono); font-size: 13px; color: var(--contour); white-space: nowrap; }
+  .alert .meta .moh { font-size: 13px; color: var(--contour); white-space: nowrap; font-weight: 600; }
   .fake { display: block; text-align: center; background: var(--fjord); color: var(--on-fjord); font-weight: 800; padding: 12px; border-radius: 12px; }
   .alert .small { display: flex; justify-content: center; gap: 18px; margin-top: 10px; font-size: 14px; color: var(--fjord); }
   .notes { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 8px; }
@@ -126,14 +143,14 @@
   .notes b { color: var(--ink); }
 
   /* Datoer og svar: oppslag */
-  .ref { background: var(--sheet); border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; }
+  .ref { background: var(--sheet); border: 1px solid var(--rule); border-radius: 20px; overflow: hidden; }
   .ref div { display: grid; grid-template-columns: minmax(0, 17em) minmax(0, 1fr); gap: 6px 16px; padding: 12px 16px; border-top: 1px solid var(--rule); align-items: baseline; }
   .ref div:first-child { border-top: 0; }
-  .ref code { font: 500 14.5px var(--mono); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; padding: 2px 8px; justify-self: start; overflow-wrap: anywhere; }
+  .ref code { font: 700 15px var(--body); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 8px; padding: 2px 8px; justify-self: start; overflow-wrap: anywhere; }
   .ref span { color: var(--ink-2); font-size: 16px; }
   @media (max-width: 560px) { .ref div { grid-template-columns: minmax(0, 1fr); } }
 
-  details { background: var(--sheet); border: 1px solid var(--rule); border-radius: 16px; }
+  details { background: var(--sheet); border: 1px solid var(--rule); border-radius: 20px; }
   details summary { cursor: pointer; padding: 16px 18px; font-weight: 700; list-style: none; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
   details summary::-webkit-details-marker { display: none; }
   details summary::after { content: "Vis"; color: var(--fjord); font-weight: 600; flex: none; }
@@ -146,8 +163,12 @@
   footer { margin-top: 56px; border-top: 1px solid var(--rule); padding-block: 22px 40px; color: var(--ink-2); font-size: 14px; }
   footer p { margin: 0 0 6px; max-width: 62ch; }
 
+  @media (min-width: 820px) and (max-width: 1000px) {
+    .scene .cabin { width: 160px !important; height: 118px !important; right: 2% !important; }
+  }
   @media (min-width: 820px) {
-    .top .wrap { padding-block: 40px 44px; }
+    .top .wrap { padding-block: 44px 70px; }
+    .scene .cabin { width: 230px; height: 170px; bottom: 34px; right: 5%; }
     .flow p { font-size: 16px; }
     .address .label { width: auto; }
   }
@@ -156,21 +177,17 @@
 <body>
 
 <header class="top">
-  <svg class="contours" viewBox="0 0 800 400" preserveAspectRatio="xMaxYMid slice" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2">
-    <path d="M520 400c10-60 60-90 120-100s120-40 160-90"/>
-    <path d="M560 400c8-44 50-68 98-76s104-30 142-70"/>
-    <path d="M600 400c6-30 40-48 76-54s88-22 124-52"/>
-    <path d="M640 400c4-18 30-30 56-34s70-14 104-36"/>
-    <path d="M800 140c-40 20-90 30-130 20s-90-40-150-30-100 50-110 90"/>
-    <path d="M800 100c-46 26-104 40-150 28s-96-48-160-36-118 62-130 108"/>
-    <path d="M800 60c-52 32-118 50-170 36s-100-56-170-42-136 74-150 126"/>
-    <path d="M800 20c-58 38-132 60-190 44s-104-64-180-48-154 86-170 144"/>
-    <circle cx="720" cy="230" r="10"/><circle cx="720" cy="230" r="26"/><circle cx="720" cy="230" r="44"/>
+  <svg class="stars" aria-hidden="true">
+    <g fill="#fff" opacity=".7">
+      <circle cx="8%" cy="18%" r="1.2"/><circle cx="22%" cy="9%" r="1"/><circle cx="37%" cy="22%" r="1.4"/><circle cx="55%" cy="7%" r="1"/>
+      <circle cx="68%" cy="16%" r="1.3"/><circle cx="83%" cy="10%" r="1"/><circle cx="93%" cy="28%" r="1.2"/><circle cx="76%" cy="36%" r="1"/>
+      <circle cx="47%" cy="38%" r="1"/><circle cx="14%" cy="44%" r="1"/><circle cx="62%" cy="30%" r="1.2"/>
+    </g>
   </svg>
   <div class="wrap">
-    <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22 16 9l8 13" fill="none" stroke="var(--sheet)" stroke-width="2.6" stroke-linejoin="round"/></svg>Hyttevarsel</div>
-    <h1>Få e-post når en full hytte blir ledig</h1>
-    <p class="lead">Folk avbestiller hele tiden, ofte rett før fristen. Hyttevarsel følger med for deg og sier fra med en gang.</p>
+    <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#f5b95c"/><path d="M7 23V15l9-7 9 7v8z" fill="#a8352c"/><rect x="13.5" y="16" width="5" height="5" rx="1" fill="#fff3d6"/></svg>Hyttevarsel</div>
+    <h1>Full hytte? Vi sier fra når det blir <em>ledig plass</em>.</h1>
+    <p class="lead">Folk avbestiller hele tiden, ofte rett før fristen. Hyttevarsel holder utkikk for deg, så du kan ta deg en kopp kakao i stedet for å sjekke DNT-siden.</p>
     <ol class="flow">
       <li><b><span>1</span>Finn</b><p>Hytta og datoene på DNT-siden</p></li>
       <li><b><span>2</span>Send</b><p>Lenken til Hyttevarsel</p></li>
@@ -182,7 +199,25 @@
       <button class="copy" type="button" id="copy">Kopier</button>
     </div>
   </div>
+  <div class="scene" aria-hidden="true">
+    <svg class="cabin" viewBox="0 0 190 140">
+      <defs><radialGradient id="glow" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#f5b95c" stop-opacity=".55"/><stop offset="1" stop-color="#f5b95c" stop-opacity="0"/></radialGradient></defs>
+      <path d="M138 30c-6-8 4-12-2-20M146 32c-6-9 5-14-1-24" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="3" stroke-linecap="round"/>
+      <rect x="134" y="36" width="12" height="22" fill="#5b2a24"/>
+      <circle cx="95" cy="98" r="60" fill="url(#glow)"/>
+      <path d="M40 120V76l55-40 55 40v44z" fill="#a8352c"/>
+      <path d="M32 80 95 33l63 47" fill="none" stroke="#f3f1ee" stroke-width="9" stroke-linejoin="round" stroke-linecap="round"/>
+      <rect x="58" y="86" width="26" height="22" rx="2" fill="#f5b95c"/>
+      <path d="M71 86v22M58 97h26" stroke="#7c2a22" stroke-width="2.5"/>
+      <rect x="102" y="84" width="22" height="36" rx="2" fill="#5b2a24"/>
+      <circle cx="119" cy="103" r="1.8" fill="#f5b95c"/>
+      <path d="M8 128l14-34 14 34z" fill="#26473c"/><path d="M14 112l8-20 8 20z" fill="#2f5a4b"/>
+      <path d="M160 128l12-30 12 30z" fill="#26473c"/>
+    </svg>
+    <svg class="snow" viewBox="0 0 400 70" preserveAspectRatio="none"><path d="M0 34C70 14 140 10 210 22s130 18 190 4V70H0z" fill="var(--snow)"/></svg>
+  </div>
 </header>
+<div class="knit" aria-hidden="true"></div>
 
 <main class="wrap">
 
