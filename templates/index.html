@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hyttevarsel</title>
+<style>
+  :root { --bg:#f6f5f1; --card:#fff; --text:#1d2321; --muted:#5f6b66; --line:#dcdcd4; --accent:#c8102e; --ok:#1f7a3f; --warn:#9a5b00; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#141716; --card:#1e2220; --text:#e9ece9; --muted:#a2aca7; --line:#343a37; --accent:#ff5a6e; --ok:#5fcf86; --warn:#f0b257; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.5rem; margin:.5rem 0 .25rem; }
+  h2 { font-size:1.1rem; margin:1.75rem 0 .5rem; }
+  p.lead { color:var(--muted); margin:0 0 1rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+  label { display:block; font-weight:600; margin:.6rem 0 .2rem; }
+  input { width:100%; font:inherit; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--text); }
+  .row { display:flex; gap:10px; }
+  .row > div { flex:1; }
+  button { font:inherit; font-weight:600; border:0; border-radius:8px; padding:11px 16px; background:var(--accent); color:#fff; margin-top:.9rem; width:100%; }
+  button.link { background:none; color:var(--muted); width:auto; padding:0; margin:0; font-weight:400; text-decoration:underline; }
+  .msg { padding:10px 14px; border-radius:8px; margin-bottom:12px; border:1px solid; }
+  .msg.err { color:var(--accent); border-color:var(--accent); }
+  .msg.ok { color:var(--ok); border-color:var(--ok); }
+  .watch-head { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+  .name { font-weight:600; }
+  .meta { color:var(--muted); font-size:.9rem; }
+  .badge { font-size:.85rem; font-weight:600; white-space:nowrap; }
+  .badge.ledig { color:var(--ok); }
+  .badge.full { color:var(--muted); }
+  .badge.feil { color:var(--warn); }
+  a { color:inherit; }
+  .expired { opacity:.6; }
+  form.inline { display:inline; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Hyttevarsel</h1>
+  <p class="lead">Følg med på fullbookede DNT-hytter. Du får e-post når det blir ledig plass. Det sjekkes omtrent hvert {{.Interval}}.</p>
+
+  {{with .Error}}<div class="msg err">{{.}}</div>{{end}}
+  {{with .Notice}}<div class="msg ok">{{.}}</div>{{end}}
+
+  <form class="card" method="post" action="/watches">
+    <label for="hytte">Lenke til hytta</label>
+    <input id="hytte" name="hytte" required placeholder="https://hyttebestilling.dnt.no/hytte/…" inputmode="url" autocomplete="off">
+    <div class="row">
+      <div>
+        <label for="dato">Ankomst</label>
+        <input id="dato" name="dato" type="date" required min="{{.Today}}" max="{{.MaxDate}}">
+      </div>
+      <div>
+        <label for="netter">Netter</label>
+        <input id="netter" name="netter" type="number" min="1" max="14" value="1">
+      </div>
+      <div>
+        <label for="personer">Personer</label>
+        <input id="personer" name="personer" type="number" min="1" max="20" value="1">
+      </div>
+    </div>
+    <button type="submit">Følg med</button>
+  </form>
+
+  <h2>Følger med på</h2>
+  {{range .Active}}
+  <div class="card">
+    <div class="watch-head">
+      <span class="name"><a href="{{bookingURL .}}">{{if .CabinName}}{{.CabinName}}{{else}}Hytte {{.CabinID}}{{end}}</a></span>
+      {{if .LastError}}<span class="badge feil">Feil ved sjekk</span>
+      {{else if eq .Status "ledig"}}<span class="badge ledig">Ledig nå ({{.Free}})</span>
+      {{else if eq .Status "full"}}<span class="badge full">Fullt</span>
+      {{else}}<span class="badge full">Venter</span>{{end}}
+    </div>
+    <div class="meta">{{dato .FromDate}}, {{netter .Nights}}, {{personer .Guests}}</div>
+    <div class="meta">Sist sjekket {{klokke .LastChecked}}{{if not .LastNotified.IsZero}} · sist varslet {{klokke .LastNotified}}{{end}}
+      · <form class="inline" method="post" action="/watches/{{.ID}}/delete"><button class="link" type="submit">Fjern</button></form>
+    </div>
+    {{with .LastError}}<div class="meta">{{.}}</div>{{end}}
+  </div>
+  {{else}}
+  <p class="meta">Ingenting ennå. Legg til en hytte over.</p>
+  {{end}}
+
+  {{if .Expired}}
+  <h2>Passert</h2>
+  {{range .Expired}}
+  <div class="card expired">
+    <span class="name">{{if .CabinName}}{{.CabinName}}{{else}}Hytte {{.CabinID}}{{end}}</span>
+    <div class="meta">{{dato .FromDate}} · fjernes automatisk etter to uker
+      · <form class="inline" method="post" action="/watches/{{.ID}}/delete"><button class="link" type="submit">Fjern nå</button></form>
+    </div>
+  </div>
+  {{end}}
+  {{end}}
+</main>
+</body>
+</html>
