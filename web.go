@@ -315,9 +315,11 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 			Legs: []Leg{{CabinID: l.id, Nights: nights}},
 		})
 		if err != nil {
+			slog.Info("ble ikke lagt inn fra siden", "cabin", l.id, "err", err)
 			failed = append(failed, err.Error())
 			continue
 		}
+		slog.Info("lagt inn fra siden", "watch", wa.ID, "title", wa.Title(), "starts", len(wa.Starts), "guests", wa.Guests)
 		names = append(names, wa.Title())
 	}
 	if len(names) == 0 {
@@ -373,6 +375,7 @@ func (s *Server) delete(w http.ResponseWriter, r *http.Request) {
 		s.redirect(w, r, "ok", "Den var allerede fjernet.")
 		return
 	}
+	slog.Info("fjernet fra siden", "watch", id, "title", wa.Title())
 	s.redirect(w, r, "ok", "Fjernet "+wa.Title()+".")
 }
 
