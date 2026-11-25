@@ -24,6 +24,18 @@ tolket. Alternativt skrives datoen i emnet eller teksten:
 **Varselet** har en stor «Bestill nå»-knapp med datoene og antall fylt inn,
 og «Jeg har booket» som stopper overvåkingen (en ferdig utfylt e-post).
 
+**Uten dato:** deler hun en lenke uten datoer, spør tjenesten «Hvilken dato?»
+med hytta i emnet, og hun svarer bare med datoen.
+
+**Auto-stopp:** et filter hos henne som videresender ordrebekreftelsene fra
+DNT til varseladressen gjør at overvåkingen stopper av seg selv når hun har
+bestilt. Bekreftelsen må komme fra `BOOKING_DOMAINS` (standard
+`dnt.no,visbook.com`) med bekreftet avsender, eller være videresendt av
+henne med DNTs avsenderlinje i teksten, og nevne hyttenavnet og
+ankomstdatoen til en aktiv overvåking. Gjenkjenningen er laget uten en ekte
+bekreftelse å se på (25. nov. 2026); juster `booking.go` når den finnes.
+E-post fra DNT kan bare stoppe overvåkinger, aldri legge inn.
+
 **Svar på en e-post fra tjenesten:** `stopp` stopper den hytta, `stopp alt`
 stopper alle, `oversikt` gir lista. Søndag kveld kommer en ukesoppsummering.
 
@@ -77,6 +89,7 @@ time). `/healthz` sier bare om løkka går, for en omstart fikser ikke DNT.
 | `MAIL_TO` | | kommaseparert; varsler og oppsummering |
 | `ALLOWED_SENDERS` | `MAIL_TO` | hvem som kan legge inn og stoppe |
 | `IMAP_AUTHSERV` | `mx.google.com` | hvem sin Authentication-Results som gjelder |
+| `BOOKING_DOMAINS` | `dnt.no,visbook.com` | avsenderdomenene til ordrebekreftelsene |
 | `BASE_URL` | | nettsiden, nederst i e-postene |
 | `VARSEL_AGENT_DIR` | | mappe med `url` og `token` til varselagenten |
 

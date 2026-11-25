@@ -75,7 +75,8 @@ func main() {
 			AuthServ: cmp.Or(os.Getenv("IMAP_AUTHSERV"), "mx.google.com"),
 		}
 		allowed := splitList(cmp.Or(os.Getenv("ALLOWED_SENDERS"), os.Getenv("MAIL_TO")))
-		go RunInbox(ctx, inbox, &MailHandler{Store: store, Poller: poller, Mailer: mailer, Allowed: allowed})
+		bookingDomains := splitList(cmp.Or(os.Getenv("BOOKING_DOMAINS"), "dnt.no,visbook.com"))
+		go RunInbox(ctx, inbox, &MailHandler{Store: store, Poller: poller, Mailer: mailer, Allowed: allowed, BookingDomains: bookingDomains})
 	} else {
 		slog.Warn("IMAP_HOST er ikke satt; innboksen leses ikke")
 	}

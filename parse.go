@@ -41,7 +41,20 @@ type Request struct {
 var (
 	ErrHelp   = errors.New("forstod ikke e-posten")
 	ErrIgnore = errors.New("svar uten beskjed") // «takk!» på et varsel
+	ErrNoDate = errors.New("fant ingen dato")
 )
+
+// Når hun deler en lenke uten datoer, spør vi om datoen med hytta i emnet
+// («[hytte 101022071]»), så svaret hennes bare trenger datoen.
+var hytteTag = regexp.MustCompile(`\[hytte ([\d,]+)\]`)
+
+func HytteTag(links []cabinLink) string {
+	ids := make([]string, len(links))
+	for i, l := range links {
+		ids[i] = strconv.Itoa(l.id)
+	}
+	return "[hytte " + strings.Join(ids, ",") + "]"
+}
 
 var (
 	idPattern       = regexp.MustCompile(`\[#(\d+)\]`)
@@ -50,7 +63,7 @@ var (
 	allPattern      = regexp.MustCompile(`(?i)(^|[^\pL])(alt|alle)([^\pL]|$)`)
 	listPattern     = regexp.MustCompile(`(?i)(^|[^\pL])(oversikt|liste|status)([^\pL]|$)`)
 	flexPattern     = regexp.MustCompile(`(?i)mellom|fleksib|hvilken som helst|ledig natt|når som helst`)
-	quoteHeader     = regexp.MustCompile(`(?i)^(on|den|man|tir|ons|tor|fre|lør|søn|\d).*(wrote|skrev|skreiv):\s*$|^-{2,}\s*(original|opprinnelig|videresendt|forwarded)|^(fra|from):\s.*@`)
+	quoteHeader     = regexp.MustCompile(`(?i)^(on|den|man|tir|ons|tor|fre|lør|søn|\d).*(wrote|skrev|skreiv)( .*)?:\s*$|^-{2,}\s*(original|opprinnelig|videresendt|forwarded)|^(fra|from):\s.*@`)
 	numberWord      = `(\d{1,2}|en|én|ei|ett|to|tre|fire|fem|seks|sju|syv|åtte|ni|ti)`
 	nightsPattern   = regexp.MustCompile(`(?i)(^|[^\pL\d])` + numberWord + `\s+(natt|netter)([^\pL]|$)`)
 	guestsPattern   = regexp.MustCompile(`(?i)(^|[^\pL\d])` + numberWord + `\s+(personer|person|pers|voksne|voksen|stk|plasser|senger|seng)([^\pL]|$)|vi er\s+` + numberWord + `([^\pL]|$)`)
@@ -315,6 +328,15 @@ func ParseMessage(subject, body string, now time.Time) (Request, error) {
 		own = clean(body)
 	}
 	links := parseLinks(subject + "\n" + body)
+	if m := hytteTag.FindStringSubmatch(subject); m != nil && len(links) == 0 {
+		for _, id := range strings.Split(m[1], ",") {
+			if n, err := strconv.Atoi(id); err == nil {
+				links = append(links, cabinLink{id: n})
+			}
+		}
+	}
+	all = hytteTag.ReplaceAllString(all, " ")
+	own = hytteTag.ReplaceAllString(own, " ")
 
 	if stopPattern.MatchString(all) {
 		switch {
@@ -334,6 +356,14 @@ func ParseMessage(subject, body string, now time.Time) (Request, error) {
 		return Request{}, ErrHelp
 	}
 	return parseAdd(own, links, now)
+}
+
+func legsOf(links []cabinLink) []Leg {
+	legs := make([]Leg, len(links))
+	for i, l := range links {
+		legs[i] = Leg{CabinID: l.id}
+	}
+	return legs
 }
 
 func parseAdd(plain string, links []cabinLink, now time.Time) (Request, error) {
@@ -374,7 +404,7 @@ func parseAdd(plain string, links []cabinLink, now time.Time) (Request, error) {
 	var start time.Time
 	for _, l := range links {
 		if l.from.IsZero() || !l.to.After(l.from) {
-			return Request{}, errors.New("fant ingen dato. Skriv datoen i emnefeltet, eller velg datoene på DNT-siden før du deler lenken")
+			return Request{Watch: Watch{Legs: legsOf(links)}}, ErrNoDate
 		}
 		if start.IsZero() || l.from.Before(start) {
 			start = l.from

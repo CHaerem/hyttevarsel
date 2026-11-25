@@ -152,11 +152,28 @@ type MailHandler struct {
 	Poller  *Poller
 	Mailer  *Mailer
 	Allowed []string // avsendere som kan styre tjenesten
+	// Domenene ordrebekreftelsene kommer fra. De kan bare stoppe en
+	// overvåking, aldri legge inn eller styre noe annet.
+	BookingDomains []string
+}
+
+var dntSenderLine = regexp.MustCompile(`(?i)@(dnt\.no|visbook\.com)\b`)
+
+func domainIn(addr string, domains []string) bool {
+	d := strings.ToLower(addr[strings.LastIndex(addr, "@")+1:])
+	for _, x := range domains {
+		x = strings.ToLower(strings.TrimSpace(x))
+		if d == x || strings.HasSuffix(d, "."+x) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 	log := slog.With("from", in.From, "subject", in.Subject)
-	if !containsFold(h.Allowed, in.From) {
+	fromDNT := domainIn(in.From, h.BookingDomains)
+	if !containsFold(h.Allowed, in.From) && !fromDNT {
 		log.Info("ignorerer e-post fra ukjent avsender")
 		return
 	}
@@ -165,6 +182,26 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 		return
 	}
 	now := time.Now()
+
+	// En ordrebekreftelse: fra DNT selv (filteret hennes videresender den),
+	// eller videresendt for hånd, med DNTs avsenderlinje i teksten.
+	if fromDNT || dntSenderLine.MatchString(in.Text) {
+		if booked := MatchBooking(h.Store.List(), in.Subject, in.Text, now); len(booked) > 0 {
+			for _, w := range booked {
+				h.Store.Delete(w.ID)
+				log.Info("stoppet etter ordrebekreftelse", "watch", w.ID, "title", w.Title())
+			}
+			if err := h.Mailer.Booked(ctx, booked); err != nil {
+				log.Error("melding om booking feilet", "err", err)
+			}
+			return
+		}
+	}
+	if fromDNT {
+		log.Info("e-post fra DNT uten treff på en overvåking")
+		return
+	}
+
 	req, err := ParseMessage(in.Subject, in.Text, now)
 	reply := func(lines ...string) {
 		if err := h.Mailer.Reply(ctx, in.From, in.Subject, in.MessageID, lines...); err != nil {
@@ -173,6 +210,9 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 	}
 	switch {
 	case errors.Is(err, ErrIgnore):
+		return
+	case errors.Is(err, ErrNoDate):
+		h.askDate(ctx, in, req.Watch.Legs)
 		return
 	case errors.Is(err, ErrHelp):
 		reply(append([]string{"Jeg fant ingen hyttelenke i e-posten din."}, helpLines...)...)
@@ -293,5 +333,28 @@ func RunSummary(ctx context.Context, store *Store, m *Mailer) {
 			return
 		case <-time.After(10 * time.Minute):
 		}
+	}
+}
+
+// askDate spør etter datoen når hun delte en lenke uten datoer. Hytta står
+// i emnet, så svaret hennes trenger bare datoen.
+func (h *MailHandler) askDate(ctx context.Context, in Incoming, legs []Leg) {
+	var names []string
+	links := make([]cabinLink, len(legs))
+	for i, l := range legs {
+		links[i] = cabinLink{id: l.CabinID}
+		name, err := h.Poller.DNT.CabinName(ctx, l.CabinID)
+		if err != nil {
+			name = fmt.Sprintf("hytte %d", l.CabinID)
+		}
+		names = append(names, name)
+	}
+	subject := fmt.Sprintf("Hvilken dato for %s? %s", strings.Join(names, " → "), HytteTag(links))
+	err := h.Mailer.Ask(ctx, in.From, subject, in.MessageID,
+		"Hvilken dato vil du følge med på for "+strings.Join(names, " → ")+"?",
+		"Svar på denne e-posten med datoen, for eksempel «12. juli», «12.–14. juli, 2 personer» eller «en natt mellom 10. og 20. juli».",
+		"Tips: velger du datoene på DNT-siden før du deler lenken, følger de med automatisk.")
+	if err != nil {
+		slog.Error("spørsmål om dato feilet", "err", err)
 	}
 }

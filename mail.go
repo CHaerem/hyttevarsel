@@ -156,6 +156,31 @@ func (m *Mailer) Reply(ctx context.Context, to, subject, inReplyTo string, lines
 	return m.Sender.Send(ctx, Message{To: []string{to}, Subject: subject, Text: text, HTML: html, InReplyTo: inReplyTo})
 }
 
+// Ask stiller et spørsmål med et eget emne (svaret hennes går til samme emne).
+func (m *Mailer) Ask(ctx context.Context, to, subject, inReplyTo string, lines ...string) error {
+	text, html := render(mailData{Heading: "Hyttevarsel", Lines: lines, Footer: m.footer()})
+	return m.Sender.Send(ctx, Message{To: []string{to}, Subject: subject, Text: text, HTML: html, InReplyTo: inReplyTo})
+}
+
+// Booked sier fra at en ordrebekreftelse stoppet overvåkingen.
+func (m *Mailer) Booked(ctx context.Context, booked []Watch) error {
+	var names []string
+	to := m.To
+	for _, w := range booked {
+		names = append(names, w.Title()+" "+tag(w))
+		to = m.recipients(w)
+	}
+	text, html := render(mailData{
+		Heading: "Booket! God tur",
+		Lines: []string{
+			"Jeg så ordrebekreftelsen fra DNT, så jeg har sluttet å følge med på " + strings.Join(names, " og ") + ".",
+			"Var det feil, send lenken på nytt, så følger jeg med igjen.",
+		},
+		Footer: m.footer(),
+	})
+	return m.Sender.Send(ctx, Message{To: to, Subject: "Booket: " + strings.Join(names, ", "), Text: text, HTML: html})
+}
+
 var helpLines = []string{
 	"Slik legger du til en hytte: åpne hytta på hyttebestilling.dnt.no, velg datoene og antall personer, trykk Del og send lenken hit.",
 	"Du kan også skrive datoen i emnefeltet: «12. juli», «12.–14. juli» (ankomst og avreise), «en natt mellom 10. og 20. juli» eller «lørdager i august». Skriv «2 personer» hvis dere er flere.",
