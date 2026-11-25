@@ -7,7 +7,7 @@ forsvinner fort. DNT har ikke noe varsel selv.
 
 ## Slik brukes den
 
-Bruksanvisningen til Kristine: [docs/bruksanvisning.md](docs/bruksanvisning.md).
+Oppskriften til Kristine: https://chaerem.github.io/hyttevarsel/ ([docs/index.html](docs/index.html), GitHub Pages fra `main:/docs`; samme innhold som tekst i [docs/bruksanvisning.md](docs/bruksanvisning.md)).
 Oppsettet før første kjøring: [docs/oppsett.md](docs/oppsett.md).
 
 **Legg til en hytte:** åpne hytta på hyttebestilling.dnt.no, velg datoer og

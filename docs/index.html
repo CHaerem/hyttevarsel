@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hyttevarsel</title>
+<meta name="description" content="Få beskjed på e-post når en fullbooket DNT-hytte blir ledig.">
+<style>
+  :root {
+    --bg: #f4f1ea; --card: #ffffff; --text: #1f2a24; --muted: #5b6760; --line: #e1ddd2;
+    --accent: #2f6b4f; --accent-soft: #e3efe8; --warm: #b8572f; --code: #f0ede5;
+    --shadow: 0 1px 2px rgba(31, 42, 36, .06), 0 6px 20px rgba(31, 42, 36, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141815; --card: #1d221f; --text: #e8ece9; --muted: #a3ada7; --line: #2f3632;
+      --accent: #7cc39d; --accent-soft: #233229; --warm: #e59a74; --code: #262c28;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 0 16px 64px; }
+  a { color: var(--accent); }
+
+  header { padding: 44px 0 28px; }
+  .mark { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; color: var(--accent);
+    letter-spacing: .02em; font-size: 15px; text-transform: uppercase; }
+  .mark svg { width: 28px; height: 28px; }
+  h1 { font-size: clamp(30px, 8vw, 42px); line-height: 1.12; margin: 14px 0 12px; letter-spacing: -.01em; }
+  .lead { font-size: 19px; color: var(--muted); margin: 0 0 22px; }
+  .address { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .address code { font-size: 16px; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 13px 18px; border-radius: 12px; font-weight: 600; text-decoration: none; font-size: 16px; }
+  .btn.primary { background: var(--accent); color: #fff; }
+  @media (prefers-color-scheme: dark) { .btn.primary { color: #10201a; } }
+  .btn.ghost { background: var(--accent-soft); color: var(--accent); }
+
+  section { margin-top: 40px; }
+  h2 { font-size: 23px; margin: 0 0 6px; }
+  h2 + p { color: var(--muted); margin-top: 0; }
+  h3 { font-size: 18px; margin: 0 0 4px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px;
+    box-shadow: var(--shadow); margin-top: 14px; }
+
+  ol.steps { list-style: none; padding: 0; margin: 16px 0 0; counter-reset: s; }
+  ol.steps > li { counter-increment: s; position: relative; background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; padding: 18px 20px 18px 70px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  ol.steps > li::before { content: counter(s); position: absolute; left: 18px; top: 18px; width: 36px; height: 36px;
+    border-radius: 50%; background: var(--accent); color: var(--card); font-weight: 700;
+    display: grid; place-items: center; font-size: 17px; }
+  ol.steps p { margin: 0; color: var(--muted); }
+
+  .mail { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+    box-shadow: var(--shadow); margin-top: 14px; }
+  .mail .meta { padding: 12px 18px; border-bottom: 1px solid var(--line); font-size: 14px; color: var(--muted); }
+  .mail .meta b { color: var(--text); font-weight: 600; }
+  .mail .body { padding: 16px 18px 18px; }
+  .mail .body h4 { margin: 0 0 8px; font-size: 18px; }
+  .mail .body p { margin: 0 0 12px; color: var(--muted); font-size: 15px; }
+  .mail .fake-btn { display: block; text-align: center; background: var(--warm); color: #fff; font-weight: 700;
+    border-radius: 10px; padding: 12px; }
+  .mail .small { margin-top: 10px; font-size: 14px; color: var(--muted); text-align: center; }
+
+  details { background: var(--card); border: 1px solid var(--line); border-radius: 16px; margin-top: 12px;
+    box-shadow: var(--shadow); }
+  summary { cursor: pointer; padding: 16px 20px; font-weight: 600; list-style: none; display: flex;
+    justify-content: space-between; align-items: center; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; font-size: 22px; color: var(--accent); line-height: 1; }
+  details[open] summary::after { content: "–"; }
+  details > div { padding: 0 20px 18px; }
+  details ol { padding-left: 22px; margin: 6px 0; }
+  details li { margin-bottom: 6px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 16px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  code { background: var(--code); border-radius: 6px; padding: 2px 6px; font-size: .92em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-word; }
+  .note { font-size: 15px; color: var(--muted); }
+  footer { margin-top: 48px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 18px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="mark">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 26 16 6l12 20z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/><path d="M12.5 26v-6h7v6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>
+      Hyttevarsel
+    </div>
+    <h1>Få beskjed når hytta blir ledig</h1>
+    <p class="lead">Er hytta full? Send lenken til Hyttevarsel. Du får en e-post i det noen avbestiller, med en knapp rett til bestillingen.</p>
+    <div class="address">
+      <code>hyttevarsel.chaerem@gmail.com</code>
+      <a class="btn ghost" href="hyttevarsel.vcf">Lagre som kontakt</a>
+    </div>
+  </header>
+
+  <section>
+    <h2>Slik gjør du</h2>
+    <p>Ingen app, ingen innlogging. Bare e-post.</p>
+    <ol class="steps">
+      <li>
+        <h3>Finn hytta og datoene</h3>
+        <p>Åpne hytta på <a href="https://hyttebestilling.dnt.no">hyttebestilling.dnt.no</a>, velg datoer og antall personer, akkurat som når du bestiller. Ser du at det er fullt, går du videre.</p>
+      </li>
+      <li>
+        <h3>Del lenken med Hyttevarsel</h3>
+        <p>Trykk <b>Del</b> og send lenken på e-post til Hyttevarsel. Du trenger ikke skrive noe, for datoene ligger i lenken.</p>
+      </li>
+      <li>
+        <h3>Vent på e-posten</h3>
+        <p>Etter et minutt får du en bekreftelse på hva det følges med på. Når noen avbestiller, kommer varselet.</p>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Slik ser varselet ut</h2>
+    <p>Plassen kan bli tatt fort, så det lønner seg å være rask.</p>
+    <div class="mail" aria-label="Eksempel på varsel">
+      <div class="meta"><b>Hyttevarsel</b> · Ledig: Skåla lør 12. juli</div>
+      <div class="body">
+        <h4>Ledig nå: Skåla</h4>
+        <p>Det er blitt plass til 2 personer. Skåla fra lørdag 12. juli, 1 natt.</p>
+        <span class="fake-btn">Bestill nå</span>
+        <div class="small">Jeg har booket · Slutt å følge med</div>
+      </div>
+    </div>
+    <p class="note">«Bestill nå» åpner DNT-siden med datoene fylt inn. «Jeg har booket» stopper varslene for den hytta.</p>
+  </section>
+
+  <section>
+    <h2>Gjør det med ett trykk</h2>
+    <p>Lag en «Følg med»-knapp i delingsmenyen én gang, så slipper du å skrive mottaker.</p>
+
+    <details>
+      <summary>iPhone</summary>
+      <div>
+        <ol>
+          <li>Åpne <b>Snarveier</b> og trykk <b>+</b>. Kall snarveien «Følg med på hytta».</li>
+          <li>Trykk <b>ⓘ</b> og slå på <b>Vis i delingsark</b>. La den ta imot <b>URL-er</b> og <b>Safari-nettsider</b>.</li>
+          <li>Legg til handlingen <b>Send e-post</b>. Mottaker: Hyttevarsel. Emne: «Følg med». Innhold: <b>Snarveisinndata</b>.</li>
+          <li>Trykk pilen på handlingen og slå <b>av</b> «Vis skjema for e-post».</li>
+        </ol>
+        <p class="note">Nå heter det bare Del → <b>Følg med på hytta</b>. Snarveien sender med Mail-appen, så e-postkontoen din må være lagt inn der.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Android</summary>
+      <div>
+        <p>Del en lenke med Gmail til Hyttevarsel én gang. Etterpå dukker Hyttevarsel opp øverst i delingsmenyen, og da er det bare Del → <b>Hyttevarsel</b> → Send.</p>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <h2>Fleksible datoer</h2>
+    <p>Skriv i emnefeltet når du sender lenken. Du får varsel for hver dato som blir ledig.</p>
+    <div class="card">
+      <table>
+        <thead><tr><th>Du skriver</th><th>Det følges med på</th></tr></thead>
+        <tbody>
+          <tr><td><code>12. juli</code></td><td>én natt med ankomst 12. juli</td></tr>
+          <tr><td><code>12.–14. juli</code></td><td>ankomst 12., avreise 14. juli</td></tr>
+          <tr><td><code>en natt mellom 10. og 20. juli</code></td><td>hver ankomstdag i perioden</td></tr>
+          <tr><td><code>lørdager i august</code></td><td>alle lørdager i august</td></tr>
+          <tr><td><code>helger i juni</code></td><td>alle fredager og lørdager i juni</td></tr>
+          <tr><td><code>2 personer</code>, <code>3 netter</code></td><td>antall personer og netter</td></tr>
+          <tr><td>flere hyttelenker</td><td>en rute, én natt på hver hytte i rekkefølge, med varsel når hele ruta er ledig</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Glemte du datoene, spør Hyttevarsel «Hvilken dato?». Da svarer du bare med datoen.</p>
+  </section>
+
+  <section>
+    <h2>Svar du kan sende</h2>
+    <div class="card">
+      <table>
+        <tbody>
+          <tr><td><code>stopp</code></td><td>svar på et varsel for å slutte å følge med på den hytta</td></tr>
+          <tr><td><code>stopp alt</code></td><td>stopper alle</td></tr>
+          <tr><td><code>oversikt</code></td><td>du får lista over alt du følger med på</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Hver søndag kveld kommer en kort oversikt. Gamle datoer rydder seg selv.</p>
+  </section>
+
+  <section>
+    <h2>Slutt å følge med av seg selv</h2>
+    <p>Valgfritt: videresend ordrebekreftelsene fra DNT til Hyttevarsel, så stopper varslene for hytta du har bestilt.</p>
+    <details>
+      <summary>Hotmail / Outlook</summary>
+      <div>
+        <ol>
+          <li>Gå til <a href="https://outlook.live.com/mail/0/options/mail/rules">Regler i Outlook på nett</a>.</li>
+          <li><b>Legg til ny regel</b>: når avsender inneholder <code>dnt.no</code>, <b>videresend</b> til Hyttevarsel.</li>
+        </ol>
+      </div>
+    </details>
+    <details>
+      <summary>Gmail</summary>
+      <div>
+        <ol>
+          <li>Innstillinger → <b>Se alle innstillinger</b> → <b>Videresending og POP/IMAP</b> → legg til Hyttevarsel som videresendingsadresse.</li>
+          <li>Søk etter <code>from:dnt.no</code> → <b>Opprett filter</b> → <b>Videresend til</b> Hyttevarsel.</li>
+        </ol>
+      </div>
+    </details>
+    <p class="note">Kommer det ingen «Booket! God tur»-e-post etter at du har bestilt, trykker du «Jeg har booket» i varselet i stedet.</p>
+  </section>
+
+  <footer>
+    Hyttevarsel hører bare på e-post fra deg, og bare når e-posttjenesten din bekrefter at den virkelig kommer fra deg. Den sjekker ledigheten hos DNT omtrent hvert 2. minutt de siste ti dagene før ankomst, og sjeldnere lenger fram. Hyttevarsel er et privat hobbyprosjekt og har ingen tilknytning til DNT.
+  </footer>
+</main>
+</body>
+</html>
