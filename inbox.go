@@ -220,16 +220,20 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 	}
 	switch {
 	case errors.Is(err, ErrIgnore):
+		log.Info("svar uten beskjed, ingenting gjort")
 		return
 	case errors.Is(err, ErrNoDate):
+		log.Info("lenke uten dato, spør om datoen", "hytter", len(req.Watch.Legs))
 		h.askDate(ctx, in, req.Watch.Legs)
 		return
 	case errors.Is(err, ErrHelp):
+		log.Info("ingen hyttelenke, sender hjelp")
 		if err := h.Mailer.Help(ctx, in.From, in.Subject, in.MessageID); err != nil {
 			log.Error("svar feilet", "err", err)
 		}
 		return
 	case err != nil:
+		log.Info("ble ikke lagt inn", "err", err)
 		reply("Hytta ble ikke lagt inn: " + err.Error() + ".")
 		return
 	}
@@ -246,6 +250,7 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 		log.Info("stoppet alle", "count", n)
 		reply(fmt.Sprintf("Hyttevarsel følger ikke lenger med på noe (%d stoppet).", n))
 	case ReqList:
+		log.Info("sender oversikten")
 		if err := h.Mailer.Summary(ctx, []string{in.From}, h.Store.List(), in.MessageID, replySubject(in.Subject)); err != nil {
 			log.Error("oversikt feilet", "err", err)
 		}

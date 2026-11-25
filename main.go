@@ -97,7 +97,7 @@ func main() {
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	slog.Info("lytter", "addr", srv.Addr, "cadence", cadence)
+	slog.Info("lytter", "addr", srv.Addr, "cadence", cadence, "overvåkinger", len(store.List()))
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server", "err", err)
 		os.Exit(1)
