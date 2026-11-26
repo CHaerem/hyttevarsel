@@ -26,6 +26,7 @@ import (
 //	<lenke> <lenke> <lenke> rute 12. juli     rute: én natt på hver, i rekkefølge
 //	stopp [#12]                               (svar på et varsel) stopper overvåking 12
 //	stopp alt, oversikt, hjelp
+//	ny lenke                                  bytter den hemmelige lenken til Mine varsler
 type RequestKind int
 
 const (
@@ -33,6 +34,7 @@ const (
 	ReqStop
 	ReqStopAll
 	ReqList
+	ReqNewLink // «ny lenke»: bytt den hemmelige lenken til Mine varsler
 )
 
 type Request struct {
@@ -71,8 +73,9 @@ var (
 	// sitattegn: lenketekstene («Jeg har booket:»), mailto-lenkene og
 	// setningene med «stopp» i hermetegn. Ellers ville et «Takk!» på et
 	// varsel blitt lest som stopp, eller som en ny hyttelenke.
-	ownText         = regexp.MustCompile(`(?i)mailto:|«(stopp|oversikt)[^»]*»|/hytte/\S+\s+(bestill|\d av \d:)|^(jeg har booket|slutt å følge med( på .*)?|slik bruker du hyttevarsel|bestill( nå| \pL+ \d.*)?|\d av \d: .*):$`)
+	ownText         = regexp.MustCompile(`(?i)mailto:|«(stopp|oversikt|ny lenke)[^»]*»|/hytte/\S+\s+(bestill|\d av \d:)|^(jeg har booket|slutt å følge med( på .*)?|slik bruker du hyttevarsel|bestill( nå| \pL+ \d.*)?|\d av \d: .*):$`)
 	replyPrefix     = regexp.MustCompile(`(?i)^\s*(re|sv)\s*:`)
+	newLinkPattern  = regexp.MustCompile(`(?i)(^|[^\pL])(ny|nytt) lenke([^\pL]|$)`)
 	listPattern     = regexp.MustCompile(`(?i)(^|[^\pL])(oversikt|liste|status)([^\pL]|$)`)
 	flexPattern     = regexp.MustCompile(`(?i)mellom|fleksib|hvilken som helst|ledig natt|når som helst`)
 	quoteHeader     = regexp.MustCompile(`(?i)^(on|den|man|tir|ons|tor|fre|lør|søn|\d).*(wrote|skrev|skreiv)( .*)?:\s*$|^-{2,}\s*(original|opprinnelig|videresendt|forwarded)|^(fra|from):\s.*@`)
@@ -439,6 +442,9 @@ func ParseMessage(subject, body string, hint int, now time.Time) (Request, error
 		return Request{Kind: ReqStop, WatchID: id, Text: own}, nil
 	}
 	if len(links) == 0 {
+		if newLinkPattern.MatchString(own) {
+			return Request{Kind: ReqNewLink}, nil
+		}
 		if listPattern.MatchString(own) {
 			return Request{Kind: ReqList}, nil
 		}

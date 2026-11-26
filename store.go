@@ -22,6 +22,7 @@ const (
 	maxNights   = 14
 	maxGuests   = 20
 	bookAheadMo = 13 // DNT åpner et år fram; litt slakk
+	maxWatches  = 40 // samtidige overvåkinger; holder belastningen på DNT og e-posten hennes nede
 )
 
 // Leg er én hytte i en overvåking. En vanlig overvåking har én; en

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/subtle"
 	"embed"
 	"fmt"
 	"html/template"
@@ -12,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -29,19 +29,40 @@ type Server struct {
 	Cabins  *Directory // hyttelista det søkes i; kan mangle
 	Address string     // varseladressen, for dem som heller sender e-post
 
-	// Token gjør siden til en hemmelig personlig lenke: alt ligger under
+	// Link gjør siden til en hemmelig personlig lenke: alt ligger under
 	// /<token>/, og alt annet enn /healthz svarer 404. Brukes når siden er
 	// åpnet mot internett (Tailscale Funnel), der tailnettet ikke lenger
 	// er porten. Lenken ligger i stien og ikke i en informasjonskapsel, så
 	// den virker likt som bokmerke, på hjemskjermen og i en annen nettleser.
-	Token string
+	Link *SecretLink
+
+	addMu sync.Mutex
+	adds  []time.Time // nye varsler den siste timen, se allowAdd
 }
 
 func (s *Server) base() string {
-	if s.Token == "" {
+	if s.Link == nil {
 		return ""
 	}
-	return "/" + s.Token
+	return "/" + s.Link.Token()
+}
+
+// Med lenken kan hvem som helst legge inn varsler, og hvert av dem gir kall
+// mot DNT. Taket per time holder en lekket lenke fra å bli en belastning.
+const maxAddsPerHour = 30
+
+func (s *Server) allowAdd(n int) bool {
+	s.addMu.Lock()
+	defer s.addMu.Unlock()
+	cut := time.Now().Add(-time.Hour)
+	s.adds = slices.DeleteFunc(s.adds, func(t time.Time) bool { return t.Before(cut) })
+	if len(s.adds)+n > maxAddsPerHour {
+		return false
+	}
+	for range n {
+		s.adds = append(s.adds, time.Now())
+	}
+	return true
 }
 
 func (s *Server) Routes() http.Handler {
@@ -51,25 +72,28 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /watches/{id}/delete", s.delete)
 	mux.HandleFunc("GET /healthz", s.healthz)
 	app := secure(mux)
-	if s.Token == "" {
+	if s.Link == nil {
 		return app
 	}
-	inner := http.StripPrefix("/"+s.Token, app)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/healthz" {
 			s.healthz(w, r)
 			return
 		}
-		first, _, slash := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
-		if subtle.ConstantTimeCompare([]byte(first), []byte(s.Token)) != 1 {
+		first, rest, slash := strings.Cut(strings.TrimPrefix(r.URL.Path, "/"), "/")
+		if !s.Link.Match(first) {
 			http.NotFound(w, r)
 			return
 		}
 		if !slash { // /<token> uten skråstrek: skjemaene trenger den
-			http.Redirect(w, r, "/"+s.Token+"/", http.StatusSeeOther)
+			http.Redirect(w, r, "/"+first+"/", http.StatusSeeOther)
 			return
 		}
-		inner.ServeHTTP(w, r)
+		// Lenken kan byttes mens tjenesten kjører, så stien skrelles her
+		// og ikke med et fast prefiks.
+		r2 := r.Clone(r.Context())
+		r2.URL.Path, r2.URL.RawPath = "/"+rest, ""
+		app.ServeHTTP(w, r2)
 	})
 }
 
@@ -267,6 +291,10 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 	links, msg := s.cabins(r.FormValue("hytte"))
 	if msg != "" {
 		s.fail(w, r, msg)
+		return
+	}
+	if !s.allowAdd(len(links)) {
+		s.fail(w, r, "Det er lagt inn mange varsler den siste timen. Prøv igjen om en stund.")
 		return
 	}
 	nights := atoiDefault(r.FormValue("netter"), 1)

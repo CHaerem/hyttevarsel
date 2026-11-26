@@ -73,8 +73,12 @@ no-referrer`, `Cache-Control: no-store` og en streng CSP. Med
 `SEND_LINK=on` sender tjenesten lenken til `MAIL_TO` én gang, og legger
 den deretter nederst i varslene. Sett den først når siden er åpnet utenfra
 og prøvd: tjenesten kan ikke selv se om lenken virker på internett.
-Ny lenke: slett fila `lenke` og `link_sent` i `watches.json`, og start på
-nytt.
+Ny lenke: hun sender «ny lenke» på e-post. Da byttes tokenet med en gang,
+den gamle lenken svarer 404, og hun får den nye på e-post.
+
+**Tak:** høyst 40 overvåkinger samtidig, og høyst 30 nye fra siden per
+time, så en lekket lenke ikke kan bli en belastning på DNT eller e-posten
+hennes.
 
 ## Hvordan ledigheten hentes
 

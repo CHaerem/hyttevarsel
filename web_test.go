@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -123,7 +124,8 @@ func TestCabinListParsing(t *testing.T) {
 func TestSecretLink(t *testing.T) {
 	_, store, p, _, m := setup(t)
 	const token = "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789-_AbCdE"
-	h := (&Server{Store: store, Poller: p, Address: m.Address, Token: token}).Routes()
+	link := &SecretLink{token: token}
+	h := (&Server{Store: store, Poller: p, Address: m.Address, Link: link}).Routes()
 	get := func(path string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest("GET", path, nil))
@@ -183,8 +185,8 @@ func TestLinkMailSentOnce(t *testing.T) {
 	if m.appLink() != nil {
 		t.Fatal("lenken skal ikke stå i e-postene før hun har fått den")
 	}
-	RunLink(context.Background(), store, m, "https://eksempel.ts.net/hemmelig/")
-	RunLink(context.Background(), store, m, "https://eksempel.ts.net/hemmelig/")
+	RunLink(context.Background(), store, m, func() string { return "https://eksempel.ts.net/hemmelig/" })
+	RunLink(context.Background(), store, m, func() string { return "https://eksempel.ts.net/hemmelig/" })
 	if got := sent.subjects(); len(got) != 1 || !strings.Contains(sent.msgs[0].HTML, `href="https://eksempel.ts.net/hemmelig/"`) || !store.LinkSent() {
 		t.Fatalf("vil ha lenken sendt én gang: %v", got)
 	}
@@ -193,9 +195,66 @@ func TestLinkMailSentOnce(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	a, err := loadOrCreateToken(dir)
-	b, _ := loadOrCreateToken(dir)
-	if err != nil || len(a) != 43 || a != b {
-		t.Fatalf("lenken skal lages én gang og være stabil: %q %q %v", a, b, err)
+	l1, err := OpenSecretLink(dir)
+	l2, _ := OpenSecretLink(dir)
+	if err != nil || len(l1.Token()) != 43 || l1.Token() != l2.Token() {
+		t.Fatalf("lenken skal lages én gang og være stabil: %q %q %v", l1.Token(), l2.Token(), err)
+	}
+}
+
+func TestNewLinkByMail(t *testing.T) {
+	_, store, p, sent, m := setup(t)
+	link, err := OpenSecretLink(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := link.Token()
+	appURL := func() string { return "https://eksempel.ts.net/" + link.Token() + "/" }
+	web := (&Server{Store: store, Poller: p, Link: link}).Routes()
+	h := &MailHandler{Store: store, Poller: p, Mailer: m, Allowed: []string{"kristine@example.com"}, Link: link, AppURL: appURL}
+	status := func(token string) int {
+		rec := httptest.NewRecorder()
+		web.ServeHTTP(rec, httptest.NewRequest("GET", "/"+token+"/", nil))
+		return rec.Code
+	}
+	if status(old) != http.StatusOK {
+		t.Fatal("lenken skal virke før byttet")
+	}
+
+	// Bare henne: en fremmed som ber om ny lenke, får ingenting.
+	h.Handle(context.Background(), Incoming{From: "fremmed@example.com", Verified: true, Subject: "ny lenke"})
+	h.Handle(context.Background(), Incoming{From: "kristine@example.com", Verified: false, Subject: "ny lenke"})
+	if link.Token() != old || len(sent.msgs) != 0 {
+		t.Fatal("bare bekreftet e-post fra henne skal kunne bytte lenken")
+	}
+
+	h.Handle(context.Background(), Incoming{From: "kristine@example.com", Verified: true, Subject: "Re: Mine varsler: din side hos Hyttevarsel", Text: "Ny lenke, takk"})
+	if link.Token() == old || status(old) != http.StatusNotFound || status(link.Token()) != http.StatusOK {
+		t.Fatal("den gamle lenken skal slutte å virke, og den nye skal virke")
+	}
+	if got := sent.subjects(); len(got) != 1 || got[0] != "Ny lenke til Mine varsler" || !strings.Contains(sent.msgs[0].HTML, link.Token()) || strings.Contains(sent.msgs[0].HTML, old) || sent.msgs[0].To[0] != "kristine@example.com" {
+		t.Fatalf("vil ha den nye lenken på e-post til henne: %v", got)
+	}
+	if again, _ := OpenSecretLink(filepath.Dir(link.path)); again.Token() != link.Token() {
+		t.Fatal("den nye lenken skal overleve en omstart")
+	}
+}
+
+func TestCaps(t *testing.T) {
+	_, store, p, _, _ := setup(t)
+	p.Spacing = 0
+	ctx := context.Background()
+	for i := range maxWatches {
+		if _, err := AddWatch(ctx, store, p, Watch{Guests: 1, Legs: []Leg{{CabinID: 100 + i, Nights: 1}}, Starts: []string{future(30)}}); err != nil {
+			t.Fatalf("nr. %d: %v", i+1, err)
+		}
+	}
+	if _, err := AddWatch(ctx, store, p, Watch{Guests: 1, Legs: []Leg{{CabinID: 500, Nights: 1}}, Starts: []string{future(30)}}); err == nil || !strings.Contains(err.Error(), "taket") {
+		t.Fatalf("nr. %d skulle vært avvist: %v", maxWatches+1, err)
+	}
+
+	s := &Server{}
+	if !s.allowAdd(maxAddsPerHour) || s.allowAdd(1) {
+		t.Fatal("taket per time skal stoppe det som kommer etterpå")
 	}
 }

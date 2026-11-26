@@ -47,6 +47,19 @@ type Mailer struct {
 	AppURL func() string
 }
 
+// NewLink sender den nye lenken etter at hun ba om å bytte.
+func (m *Mailer) NewLink(ctx context.Context, to, appURL, inReplyTo string) error {
+	d := mailData{
+		Heading: "Ny lenke til Mine varsler",
+		Lines: []string{
+			"Her er den nye lenken. Den gamle virker ikke lenger, så bytt bokmerket eller ikonet på hjemskjermen.",
+			"Varslene dine er de samme som før.",
+		},
+		Buttons: []mailLink{{"Åpne Mine varsler", appURL}},
+	}
+	return m.send(ctx, []string{to}, "Ny lenke til Mine varsler", inReplyTo, "", d)
+}
+
 // appLink er lenken til «Mine varsler» som legges nederst i e-postene.
 func (m *Mailer) appLink() []mailLink {
 	if m.AppURL == nil {
@@ -67,7 +80,7 @@ func (m *Mailer) Link(ctx context.Context, appURL string) error {
 			"Lenken er personlig og virker uten innlogging, så ikke del den videre. Lagre den som bokmerke, eller legg den på hjemskjermen.",
 		},
 		Buttons: []mailLink{{"Åpne Mine varsler", appURL}},
-		Footer:  "Varslene kommer fortsatt på e-post. Du kan også sende hyttelenker hit som før.",
+		Footer:  "Varslene kommer fortsatt på e-post. Har noen andre fått lenken, svar «ny lenke», så får du en ny og den gamle slutter å virke.",
 	}
 	return m.send(ctx, m.To, "Mine varsler: din side hos Hyttevarsel", "", "", d)
 }

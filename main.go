@@ -5,13 +5,10 @@ package main
 import (
 	"cmp"
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -71,21 +68,21 @@ func main() {
 		poller.Alarm = &VarselAgent{URLFile: dir + "/url", TokenFile: dir + "/token", Client: &http.Client{Timeout: 30 * time.Second}}
 	}
 
-	// SECRET_LINK=on legger siden bak en hemmelig personlig lenke (web.go).
-	// Lenken lages her første gang og ligger i volumet, så den aldri går
-	// gjennom git, chat eller loggen. SEND_LINK=on sender den til MAIL_TO,
-	// og settes først når siden er åpnet utenfra og prøvd.
-	token, appURL := "", ""
+	// SECRET_LINK=on legger siden bak en hemmelig personlig lenke (link.go,
+	// web.go). SEND_LINK=on sender den til MAIL_TO, og settes først når
+	// siden er åpnet utenfra og prøvd.
+	var link *SecretLink
+	var appURL func() string
 	if os.Getenv("SECRET_LINK") == "on" {
-		if token, err = loadOrCreateToken(cmp.Or(os.Getenv("DATA_DIR"), "data")); err != nil {
+		if link, err = OpenSecretLink(cmp.Or(os.Getenv("DATA_DIR"), "data")); err != nil {
 			slog.Error("kan ikke lage den hemmelige lenken", "err", err)
 			os.Exit(1)
 		}
 		if base := strings.TrimRight(os.Getenv("BASE_URL"), "/"); base != "" {
-			appURL = base + "/" + token + "/"
+			appURL = func() string { return base + "/" + link.Token() + "/" }
 			mailer.AppURL = func() string {
 				if store.LinkSent() {
-					return appURL
+					return appURL()
 				}
 				return ""
 			}
@@ -96,7 +93,7 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if appURL != "" && os.Getenv("SEND_LINK") == "on" && os.Getenv("SMTP_HOST") != "" && len(mailer.To) > 0 {
+	if appURL != nil && os.Getenv("SEND_LINK") == "on" && os.Getenv("SMTP_HOST") != "" && len(mailer.To) > 0 {
 		go RunLink(ctx, store, mailer, appURL)
 	}
 	go poller.Run(ctx)
@@ -113,14 +110,14 @@ func main() {
 		}
 		allowed := splitList(cmp.Or(os.Getenv("ALLOWED_SENDERS"), os.Getenv("MAIL_TO")))
 		bookingDomains := splitList(cmp.Or(os.Getenv("BOOKING_DOMAINS"), "dnt.no,visbook.com"))
-		go RunInbox(ctx, inbox, &MailHandler{Store: store, Poller: poller, Mailer: mailer, Allowed: allowed, BookingDomains: bookingDomains})
+		go RunInbox(ctx, inbox, &MailHandler{Store: store, Poller: poller, Mailer: mailer, Allowed: allowed, BookingDomains: bookingDomains, Link: link, AppURL: appURL})
 	} else {
 		slog.Warn("IMAP_HOST er ikke satt; innboksen leses ikke")
 	}
 
 	srv := &http.Server{
 		Addr:              cmp.Or(os.Getenv("LISTEN"), ":8080"),
-		Handler:           (&Server{Store: store, Poller: poller, Cabins: cabins, Address: address, Token: token}).Routes(),
+		Handler:           (&Server{Store: store, Poller: poller, Cabins: cabins, Address: address, Link: link}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      90 * time.Second,
@@ -133,27 +130,11 @@ func main() {
 		defer cancel()
 		srv.Shutdown(shutdown)
 	}()
-	slog.Info("lytter", "addr", srv.Addr, "cadence", cadence, "overvåkinger", len(store.List()), "hemmelig lenke", token != "")
+	slog.Info("lytter", "addr", srv.Addr, "cadence", cadence, "overvåkinger", len(store.List()), "hemmelig lenke", link != nil)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		slog.Error("server", "err", err)
 		os.Exit(1)
 	}
-}
-
-// loadOrCreateToken gir den hemmelige delen av lenken: 32 tilfeldige byte.
-func loadOrCreateToken(dir string) (string, error) {
-	path := filepath.Join(dir, "lenke")
-	if b, err := os.ReadFile(path); err == nil {
-		if t := strings.TrimSpace(string(b)); len(t) >= 40 {
-			return t, nil
-		}
-	}
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	t := base64.RawURLEncoding.EncodeToString(raw)
-	return t, os.WriteFile(path, []byte(t+"\n"), 0o600)
 }
 
 // parseCadence leser «2m,5m,15m» (≤10 dager, ≤30 dager, lenger fram).

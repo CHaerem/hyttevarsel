@@ -164,6 +164,11 @@ type MailHandler struct {
 	// Domenene ordrebekreftelsene kommer fra. De kan bare stoppe en
 	// overvåking, aldri legge inn eller styre noe annet.
 	BookingDomains []string
+
+	// Link og AppURL finnes når «Mine varsler» ligger bak en hemmelig lenke.
+	// Da kan hun be om en ny lenke på e-post.
+	Link   *SecretLink
+	AppURL func() string
 }
 
 var dntSenderLine = regexp.MustCompile(`(?i)@(dnt\.no|visbook\.com)\b`)
@@ -249,6 +254,25 @@ func (h *MailHandler) Handle(ctx context.Context, in Incoming) {
 		}
 		log.Info("stoppet alle", "count", n)
 		reply(fmt.Sprintf("Hyttevarsel følger ikke lenger med på noe (%d stoppet).", n))
+	case ReqNewLink:
+		if h.Link == nil || h.AppURL == nil {
+			log.Info("ba om ny lenke, men siden har ingen")
+			if err := h.Mailer.Help(ctx, in.From, in.Subject, in.MessageID); err != nil {
+				log.Error("svar feilet", "err", err)
+			}
+			return
+		}
+		if _, err := h.Link.Rotate(); err != nil {
+			log.Error("kunne ikke bytte lenken", "err", err)
+			reply("Lenken ble ikke byttet. Prøv igjen om litt.")
+			return
+		}
+		log.Info("lenken til Mine varsler er byttet")
+		if err := h.Mailer.NewLink(ctx, in.From, h.AppURL(), in.MessageID); err != nil {
+			log.Error("e-posten med den nye lenken feilet", "err", err)
+			return
+		}
+		h.Store.SetLinkSent()
 	case ReqList:
 		log.Info("sender oversikten")
 		if err := h.Mailer.Summary(ctx, []string{in.From}, h.Store.List(), in.MessageID, replySubject(in.Subject)); err != nil {
@@ -406,6 +430,15 @@ func AddWatch(ctx context.Context, store *Store, p *Poller, w Watch) (Watch, err
 	if err := w.Init(now); err != nil {
 		return Watch{}, err
 	}
+	active := 0
+	for _, e := range store.List() {
+		if !e.Expired(now) {
+			active++
+		}
+	}
+	if active >= maxWatches {
+		return Watch{}, fmt.Errorf("du følger allerede med på %d hytter, som er taket. Fjern en før du legger til en ny", maxWatches)
+	}
 	for i, l := range w.Legs {
 		from, to := l.Stay(w.Starts[0])
 		if _, err := p.DNT.Check(ctx, l.CabinID, from, to); err != nil {
@@ -516,9 +549,9 @@ func (h *MailHandler) askDate(ctx context.Context, in Incoming, legs []Leg) {
 // e-posten er sendt. Den slås på med SEND_LINK=on først når siden er åpnet
 // utenfra og prøvd: fra en pod i klusteret går ts.net-navnet til
 // tailnettet, så tjenesten kan ikke selv se om lenken virker på internett.
-func RunLink(ctx context.Context, store *Store, m *Mailer, appURL string) {
+func RunLink(ctx context.Context, store *Store, m *Mailer, appURL func() string) {
 	for !store.LinkSent() {
-		if err := m.Link(ctx, appURL); err != nil {
+		if err := m.Link(ctx, appURL()); err != nil {
 			slog.Error("e-posten med lenken feilet", "err", err)
 		} else {
 			slog.Info("lenken til Mine varsler er sendt", "to", m.To)
