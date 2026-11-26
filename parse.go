@@ -73,7 +73,7 @@ var (
 	// sitattegn: lenketekstene («Jeg har booket:»), mailto-lenkene og
 	// setningene med «stopp» i hermetegn. Ellers ville et «Takk!» på et
 	// varsel blitt lest som stopp, eller som en ny hyttelenke.
-	ownText         = regexp.MustCompile(`(?i)mailto:|«(stopp|oversikt|ny lenke)[^»]*»|/hytte/\S+\s+(bestill|\d av \d:)|^(jeg har booket|slutt å følge med( på .*)?|slik bruker du hyttevarsel|bestill( nå| \pL+ \d.*)?|\d av \d: .*):$`)
+	ownText         = regexp.MustCompile(`(?i)mailto:|«(stopp|oversikt|ny lenke)[^»]*»|/hytte/\S+\s+(bestill|\d av \d:)|^(jeg har booket|slutt å følge med( på .*)?|slik bruker du hyttevarsel|bestill( nå| \pL+ \d.*)?|\d av \d: .*):$|^ny lenke til mine varsler$`)
 	replyPrefix     = regexp.MustCompile(`(?i)^\s*(re|sv)\s*:`)
 	newLinkPattern  = regexp.MustCompile(`(?i)(^|[^\pL])(ny|nytt) lenke([^\pL]|$)`)
 	listPattern     = regexp.MustCompile(`(?i)(^|[^\pL])(oversikt|liste|status)([^\pL]|$)`)

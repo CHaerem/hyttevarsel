@@ -84,7 +84,6 @@
 <main>
   <div class="brand"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 20v-8l8-6 8 6v8z"/><path d="M10 20v-5h4v5"/></svg>Hyttevarsel</div>
 
-  {{with .Error}}<p class="msg err" role="alert">{{.}}</p>{{end}}
   {{with .Notice}}<p class="msg" role="status">{{.}}</p>{{end}}
 
   <section>
@@ -118,6 +117,7 @@
 
   <section id="ny">
     <h2 class="h">Følg med på en hytte</h2>
+    {{with .Error}}<p class="msg err" role="alert">{{.}}</p>{{end}}
     <form class="add" method="post" action="{{.Base}}/watches">
       <div>
         <label for="hytte">Hytte</label>
